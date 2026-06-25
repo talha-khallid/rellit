@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Style Captions</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #151515;
+            display: flex;
+            justify-content: center;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow: hidden;
+        }
+
+        .mobile-screen {
+            width: 100%;
+            max-width: 521px;
+            height: 100vh;
+            background-color: #080808; 
+            border-left: 1px solid #282828;
+            border-right: 1px solid #282828;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .caption-wrapper {
+            width: 100%;
+            padding-left: 26px;
+            padding-right: 76px; 
+            box-sizing: border-box;
+            font-size: 21px; 
+            line-height: 1.45;
+        }
+
+        .caption-scroll-container {
+            width: 100%;
+            height: 10.15em; /* Exactly 7 lines height (7 * 1.45) */
+            overflow: hidden;
+            position: relative;
+            
+            -webkit-mask-image: linear-gradient(to bottom, 
+                rgba(0,0,0,0) 0%, 
+                rgba(0,0,0,0.25) 15%, 
+                rgba(0,0,0,1) 40%, 
+                rgba(0,0,0,1) 60%, 
+                rgba(0,0,0,0.25) 85%, 
+                rgba(0,0,0,0) 100%
+            );
+            mask-image: linear-gradient(to bottom, 
+                rgba(0,0,0,0) 0%, 
+                rgba(0,0,0,0.25) 15%, 
+                rgba(0,0,0,1) 40%, 
+                rgba(0,0,0,1) 60%, 
+                rgba(0,0,0,0.25) 85%, 
+                rgba(0,0,0,0) 100%
+            );
+        }
+
+        .caption-track {
+            position: relative;
+            transition: transform 0.6s cubic-bezier(0.25, 1, 0.3, 1);
+            will-change: transform;
+            text-align: left;
+        }
+
+        .word {
+            font-weight: 500;
+            color: #a6a6a6;
+            transition: color 0.3s ease, text-shadow 0.3s ease;
+        }
+
+        .word.active-word {
+            color: #ffffff;
+            text-shadow: 0 0 1px rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="mobile-screen">
+        <div class="caption-wrapper">
+            <div class="caption-scroll-container">
+                <div class="caption-track" id="caption-track">
+                    <!-- Dynamic words loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fallbackData = [
+            {
+                "text": "Dynamic text highlighting creates a reading rhythm that matches the user's natural reading pace, reducing cognitive load and helping them to maintain focus and flow.",
+                "duration": 8.0
+            }
+        ];
+
+        let currentLineIndex = 0;
+        let visualLines = [];
+        let lineTimer = null;
+
+        async function init() {
+            let segments = [];
+            try {
+                const res = await fetch('captions.json');
+                if (!res.ok) throw new Error('Network response not ok');
+                segments = await res.json();
+                console.log('Loaded captions from captions.json');
+            } catch (e) {
+                console.warn('Failed to fetch captions.json, using fallback data.', e);
+                segments = fallbackData;
+            }
+            
+            renderSegments(segments);
+            
+            // Allow DOM to layout the text naturally
+            setTimeout(() => {
+                calculateLines();
+                playLine(0);
+            }, 100);
+            
+            window.addEventListener('resize', () => {
+                clearTimeout(lineTimer);
+                calculateLines();
+                playLine(currentLineIndex);
+            });
+        }
+
+        function renderSegments(segments) {
+            const track = document.getElementById('caption-track');
+            track.innerHTML = '';
+            segments.forEach((seg) => {
+                const words = seg.text.split(' ');
+                const timePerWord = seg.duration / words.length;
+                words.forEach((word) => {
+                    if(word.trim() === '') return;
+                    const span = document.createElement('span');
+                    span.className = 'word';
+                    // The space is crucial for natural text wrapping
+                    span.innerText = word + ' '; 
+                    span.dataset.duration = timePerWord; 
+                    track.appendChild(span);
+                });
+            });
+        }
+
+        function calculateLines() {
+            const track = document.getElementById('caption-track');
+            const wordSpans = track.querySelectorAll('.word');
+            visualLines = [];
+            let currentLine = [];
+            let currentOffsetTop = -1;
+
+            wordSpans.forEach(span => {
+                // Group words by their vertical top position
+                if (currentOffsetTop === -1 || Math.abs(span.offsetTop - currentOffsetTop) > 5) { 
+                    if (currentLine.length > 0) {
+                        visualLines.push(currentLine);
+                    }
+                    currentLine = [span];
+                    currentOffsetTop = span.offsetTop;
+                } else {
+                    currentLine.push(span);
+                }
+            });
+            if (currentLine.length > 0) {
+                visualLines.push(currentLine);
+            }
+        }
+
+        function playLine(index) {
+            if (visualLines.length === 0) return;
+            
+            if (index >= visualLines.length) {
+                index = 0; 
+            }
+            currentLineIndex = index;
+            
+            if (lineTimer) clearTimeout(lineTimer);
+            
+            const track = document.getElementById('caption-track');
+            
+            // Remove previous active highlights
+            document.querySelectorAll('.word').forEach(w => w.classList.remove('active-word'));
+            
+            const activeLineSpans = visualLines[index];
+            let lineDurationMs = 0;
+            
+            // Highlight the new line
+            activeLineSpans.forEach(span => {
+                span.classList.add('active-word');
+                lineDurationMs += parseFloat(span.dataset.duration) * 1000;
+            });
+            
+            // Center the entire block
+            const container = document.querySelector('.caption-scroll-container');
+            const containerHeight = container.clientHeight;
+            const lineTop = activeLineSpans[0].offsetTop;
+            const lineHeight = activeLineSpans[0].offsetHeight;
+            
+            const translation = (containerHeight / 2) - (lineTop + lineHeight / 2);
+            track.style.transform = `translateY(${translation}px)`;
+            
+            lineTimer = setTimeout(() => {
+                playLine(index + 1);
+            }, lineDurationMs);
+        }
+
+        // Run without waiting for DOMContentLoaded just in case
+        init();
+    </script>
+</body>
+</html>
