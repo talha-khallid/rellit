@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok Style Captions</title>
+    <title>TikTok Style Captions Editor</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
@@ -11,7 +11,7 @@
             margin: 0;
             padding: 0;
             height: 100%;
-            background-color: #151515;
+            background-color: #111;
             display: flex;
             justify-content: center;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -20,17 +20,131 @@
             overflow: hidden;
         }
 
+        /* --- Editor Layout --- */
+        .editor-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .sidebar {
+            width: 320px;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #333;
+            border-right: 1px solid #333;
+        }
+
+        .sidebar h2 {
+            margin-top: 0;
+            color: #fff;
+            font-size: 18px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .center-preview {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #111;
+        }
+
+        /* --- UI Elements --- */
+        .card {
+            background: #252525;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .card h4 {
+            margin: 0 0 10px 0;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"], input[type="number"], textarea {
+            width: 100%;
+            background: #111;
+            color: #fff;
+            border: 1px solid #444;
+            padding: 8px;
+            border-radius: 4px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+            font-family: inherit;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .row input {
+            flex: 1;
+        }
+
+        button {
+            cursor: pointer;
+            background: #3a86ff;
+            color: #fff;
+            font-weight: 600;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            width: 100%;
+            transition: background 0.2s;
+        }
+
+        button:hover { background: #2a76ef; }
+        button.danger { background: #ff0033; }
+        button.danger:hover { background: #e0002b; }
+        button.play-btn {
+            background: #00d084;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        button.play-btn:hover { background: #00b070; }
+
+        .line-text-preview {
+            font-size: 12px;
+            color: #ccc;
+            margin-bottom: 10px;
+            font-style: italic;
+            border-left: 2px solid #555;
+            padding-left: 8px;
+        }
+
+        /* --- Mobile Screen (Unchanged Core) --- */
         .mobile-screen {
             width: 100%;
             max-width: 521px;
             height: 100vh;
             background-color: #080808; 
-            border-left: 1px solid #282828;
-            border-right: 1px solid #282828;
             box-sizing: border-box;
             display: flex;
             align-items: center;
             position: relative;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
         }
 
         .caption-wrapper {
@@ -44,9 +158,10 @@
 
         .caption-scroll-container {
             width: 100%;
-            height: 10.15em; /* Exactly 7 lines height (7 * 1.45) */
+            height: 10.15em; 
             overflow: hidden;
             position: relative;
+            cursor: grab;
             
             -webkit-mask-image: linear-gradient(to bottom, 
                 rgba(0,0,0,0) 0%, 
@@ -64,6 +179,10 @@
                 rgba(0,0,0,0.25) 85%, 
                 rgba(0,0,0,0) 100%
             );
+        }
+
+        .caption-scroll-container:active {
+            cursor: grabbing;
         }
 
         .caption-track {
@@ -86,68 +205,116 @@
     </style>
 </head>
 <body>
-    <div class="mobile-screen">
-        <div class="caption-wrapper">
-            <div class="caption-scroll-container">
-                <div class="caption-track" id="caption-track">
-                    <!-- Dynamic words loaded here -->
+    <div class="editor-container">
+        
+        <!-- LEFT SIDEBAR: Global Management -->
+        <div class="sidebar" id="left-sidebar">
+            <h2>Playback & Texts</h2>
+            <button class="play-btn" id="play-pause-btn" onclick="togglePlayback()">Pause Animation</button>
+            <p style="font-size: 12px; color: #888; margin-top: 0;">Scroll or drag the text on the screen when paused to seek.</p>
+            
+            <div id="segments-list">
+                <!-- Segments rendered here -->
+            </div>
+
+            <div class="card" style="background: #1e1e1e; border: 1px dashed #444;">
+                <h4>Add New Text</h4>
+                <label>Text Content</label>
+                <textarea id="new-text-input" placeholder="Type new text here..."></textarea>
+                <label>Total Duration (seconds)</label>
+                <input type="number" id="new-duration-input" step="0.5" value="5.0">
+                <button onclick="addSegment()">Add Segment</button>
+            </div>
+        </div>
+
+        <!-- CENTER: Mobile Screen -->
+        <div class="center-preview">
+            <div class="mobile-screen">
+                <div class="caption-wrapper">
+                    <div class="caption-scroll-container" id="scroll-container">
+                        <div class="caption-track" id="caption-track">
+                            <!-- Dynamic words loaded here -->
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- RIGHT SIDEBAR: Line Editor -->
+        <div class="sidebar" id="right-sidebar">
+            <h2>Line Customization</h2>
+            <p style="font-size: 12px; color: #888; margin-top: 0;">Edit specific colors and timings for each physical line below.</p>
+            <div id="lines-editor-list">
+                <!-- Line configs rendered here -->
+            </div>
+        </div>
+
     </div>
 
     <script>
-        const fallbackData = [
+        let segments = [
             {
-                "text": "Dynamic text highlighting creates a reading rhythm that matches the user's natural reading pace, reducing cognitive load and helping them to maintain focus and flow.",
-                "duration": 8.0
+                "text": "Dynamic text highlighting creates a reading rhythm that matches the user's natural reading pace, reducing cognitive load.",
+                "duration": 6.0
+            },
+            {
+                "text": "Standard interfaces often present overwhelming walls of text, but guiding the eye ensures the viewer never loses their place.",
+                "duration": 6.0
             }
         ];
 
         let currentLineIndex = 0;
         let visualLines = [];
+        let lineSettings = {}; // Keyed by line index. Example: { 0: { color: '#ffffff', duration: 2.0 } }
         let lineTimer = null;
+        let isPlaying = true;
 
         async function init() {
-            let segments = [];
+            // Try load local data if any, else use defaults
             try {
                 const res = await fetch('captions.json');
-                if (!res.ok) throw new Error('Network response not ok');
-                segments = await res.json();
-                console.log('Loaded captions from captions.json');
-            } catch (e) {
-                console.warn('Failed to fetch captions.json, using fallback data.', e);
-                segments = fallbackData;
-            }
-            
-            renderSegments(segments);
+                if (res.ok) segments = await res.json();
+            } catch (e) { }
+
+            refreshAll();
+
+            // Drag and Scroll seeking events
+            setupScrubbing();
+        }
+
+        function refreshAll() {
+            renderLeftSidebar();
+            renderSegmentsToDOM();
             
             // Allow DOM to layout the text naturally
             setTimeout(() => {
                 calculateLines();
-                playLine(0);
+                initializeLineSettings();
+                renderRightSidebar();
+                
+                if (isPlaying) {
+                    if (lineTimer) clearTimeout(lineTimer);
+                    playLoop();
+                } else {
+                    highlightLine(currentLineIndex);
+                }
             }, 100);
-            
-            window.addEventListener('resize', () => {
-                clearTimeout(lineTimer);
-                calculateLines();
-                playLine(currentLineIndex);
-            });
         }
 
-        function renderSegments(segments) {
+        // --- Core Engine ---
+
+        function renderSegmentsToDOM() {
             const track = document.getElementById('caption-track');
             track.innerHTML = '';
             segments.forEach((seg) => {
                 const words = seg.text.split(' ');
-                const timePerWord = seg.duration / words.length;
+                const timePerWord = parseFloat(seg.duration) / words.length;
                 words.forEach((word) => {
                     if(word.trim() === '') return;
                     const span = document.createElement('span');
                     span.className = 'word';
-                    // The space is crucial for natural text wrapping
                     span.innerText = word + ' '; 
-                    span.dataset.duration = timePerWord; 
+                    span.dataset.baseDuration = timePerWord; 
                     track.appendChild(span);
                 });
             });
@@ -161,48 +328,81 @@
             let currentOffsetTop = -1;
 
             wordSpans.forEach(span => {
-                // Group words by their vertical top position
                 if (currentOffsetTop === -1 || Math.abs(span.offsetTop - currentOffsetTop) > 5) { 
-                    if (currentLine.length > 0) {
-                        visualLines.push(currentLine);
-                    }
+                    if (currentLine.length > 0) visualLines.push(currentLine);
                     currentLine = [span];
                     currentOffsetTop = span.offsetTop;
                 } else {
                     currentLine.push(span);
                 }
             });
-            if (currentLine.length > 0) {
-                visualLines.push(currentLine);
-            }
+            if (currentLine.length > 0) visualLines.push(currentLine);
         }
 
-        function playLine(index) {
+        function initializeLineSettings() {
+            // Re-map line settings in case lines changed (dumb index matching for now per requirements)
+            visualLines.forEach((line, index) => {
+                if (!lineSettings[index]) {
+                    let baseDur = 0;
+                    line.forEach(span => baseDur += parseFloat(span.dataset.baseDuration));
+                    lineSettings[index] = {
+                        color: '#ffffff',
+                        duration: baseDur.toFixed(2)
+                    };
+                }
+            });
+            
+            // Cleanup stale settings
+            Object.keys(lineSettings).forEach(key => {
+                if (parseInt(key) >= visualLines.length) delete lineSettings[key];
+            });
+        }
+
+        function playLoop() {
+            if (!isPlaying) return;
             if (visualLines.length === 0) return;
             
-            if (index >= visualLines.length) {
-                index = 0; 
+            if (currentLineIndex >= visualLines.length) {
+                currentLineIndex = 0; 
             }
-            currentLineIndex = index;
             
-            if (lineTimer) clearTimeout(lineTimer);
+            highlightLine(currentLineIndex);
+            
+            let durationMs = parseFloat(lineSettings[currentLineIndex].duration) * 1000;
+            
+            lineTimer = setTimeout(() => {
+                currentLineIndex++;
+                playLoop();
+            }, durationMs);
+        }
+
+        function highlightLine(index) {
+            if (index < 0 || index >= visualLines.length) return;
             
             const track = document.getElementById('caption-track');
             
-            // Remove previous active highlights
-            document.querySelectorAll('.word').forEach(w => w.classList.remove('active-word'));
-            
-            const activeLineSpans = visualLines[index];
-            let lineDurationMs = 0;
-            
-            // Highlight the new line
-            activeLineSpans.forEach(span => {
-                span.classList.add('active-word');
-                lineDurationMs += parseFloat(span.dataset.duration) * 1000;
+            // Clear all
+            document.querySelectorAll('.word').forEach(w => {
+                w.classList.remove('active-word');
+                w.style.color = '';
+                w.style.textShadow = '';
             });
             
-            // Center the entire block
-            const container = document.querySelector('.caption-scroll-container');
+            const activeLineSpans = visualLines[index];
+            const settings = lineSettings[index];
+            
+            // Apply custom styles
+            activeLineSpans.forEach(span => {
+                span.classList.add('active-word');
+                if (settings && settings.color !== '#ffffff') {
+                    span.style.color = settings.color;
+                    // Custom text shadow mapping
+                    span.style.textShadow = `0 0 1px ${settings.color}`;
+                }
+            });
+            
+            // Scroll to center
+            const container = document.getElementById('scroll-container');
             const containerHeight = container.clientHeight;
             const lineTop = activeLineSpans[0].offsetTop;
             const lineHeight = activeLineSpans[0].offsetHeight;
@@ -210,12 +410,166 @@
             const translation = (containerHeight / 2) - (lineTop + lineHeight / 2);
             track.style.transform = `translateY(${translation}px)`;
             
-            lineTimer = setTimeout(() => {
-                playLine(index + 1);
-            }, lineDurationMs);
+            // Scroll right sidebar to show active config
+            const activeCard = document.getElementById(`line-card-${index}`);
+            if (activeCard && isPlaying) {
+                activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                // Add a subtle flash
+                activeCard.style.boxShadow = '0 0 10px #3a86ff';
+                setTimeout(() => activeCard.style.boxShadow = 'none', 500);
+            }
         }
 
-        // Run without waiting for DOMContentLoaded just in case
+        // --- Playback Controls & Scrubbing ---
+
+        function togglePlayback() {
+            isPlaying = !isPlaying;
+            const btn = document.getElementById('play-pause-btn');
+            if (isPlaying) {
+                btn.innerText = "Pause Animation";
+                btn.style.background = "#00d084";
+                playLoop();
+            } else {
+                btn.innerText = "Play Animation";
+                btn.style.background = "#ff9800";
+                if (lineTimer) clearTimeout(lineTimer);
+            }
+        }
+
+        function scrubToLine(offset) {
+            if (isPlaying) return;
+            let newIndex = currentLineIndex + offset;
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex >= visualLines.length) newIndex = visualLines.length - 1;
+            currentLineIndex = newIndex;
+            highlightLine(currentLineIndex);
+        }
+
+        function setupScrubbing() {
+            const container = document.getElementById('scroll-container');
+            
+            container.addEventListener('wheel', (e) => {
+                if (isPlaying) return;
+                e.preventDefault();
+                if (e.deltaY > 0) scrubToLine(1);
+                else scrubToLine(-1);
+            });
+
+            let startY = 0;
+            container.addEventListener('mousedown', (e) => {
+                if (isPlaying) return;
+                startY = e.clientY;
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+
+            function onMouseMove(e) {
+                const deltaY = startY - e.clientY;
+                if (Math.abs(deltaY) > 25) { // Swipe threshold
+                    if (deltaY > 0) scrubToLine(1);
+                    else scrubToLine(-1);
+                    startY = e.clientY;
+                }
+            }
+
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            }
+        }
+
+        // --- Left Sidebar Logic ---
+
+        function renderLeftSidebar() {
+            const list = document.getElementById('segments-list');
+            list.innerHTML = '';
+            segments.forEach((seg, i) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <label>Segment ${i+1}</label>
+                    <p style="font-size: 13px; color: #ccc; margin: 5px 0;">"${seg.text}"</p>
+                    <p style="font-size: 12px; color: #888; margin: 0 0 10px 0;">Base Duration: ${seg.duration}s</p>
+                    <button class="danger" onclick="removeSegment(${i})">Remove</button>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        function addSegment() {
+            const textInput = document.getElementById('new-text-input');
+            const durInput = document.getElementById('new-duration-input');
+            if (textInput.value.trim() === '') return;
+            
+            segments.push({
+                text: textInput.value,
+                duration: parseFloat(durInput.value) || 5.0
+            });
+            
+            textInput.value = '';
+            refreshAll();
+        }
+
+        function removeSegment(index) {
+            segments.splice(index, 1);
+            // Reset state entirely since line indices will be horribly shifted
+            lineSettings = {};
+            currentLineIndex = 0;
+            refreshAll();
+        }
+
+        // --- Right Sidebar Logic ---
+
+        function renderRightSidebar() {
+            const list = document.getElementById('lines-editor-list');
+            list.innerHTML = '';
+            
+            visualLines.forEach((line, index) => {
+                const textPreview = line.map(span => span.innerText).join('').trim();
+                const settings = lineSettings[index];
+                
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.id = `line-card-${index}`;
+                card.style.transition = 'box-shadow 0.3s ease';
+                
+                card.innerHTML = `
+                    <h4>Line ${index + 1}</h4>
+                    <div class="line-text-preview">"${textPreview}"</div>
+                    
+                    <div class="row">
+                        <div>
+                            <label>Duration (s)</label>
+                            <input type="number" step="0.1" value="${settings.duration}" onchange="updateLineDuration(${index}, this.value)">
+                        </div>
+                        <div>
+                            <label>Active Color</label>
+                            <input type="color" value="${settings.color}" onchange="updateLineColor(${index}, this.value)">
+                        </div>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        function updateLineDuration(index, val) {
+            lineSettings[index].duration = parseFloat(val) || 1.0;
+        }
+
+        function updateLineColor(index, val) {
+            lineSettings[index].color = val;
+            if (!isPlaying && currentLineIndex === index) {
+                highlightLine(index); // Live preview if paused on this line
+            }
+        }
+
+        // Recalculate physical lines if the screen is resized (just in case)
+        window.addEventListener('resize', () => {
+            if (isPlaying) togglePlayback(); // Pause on resize to avoid chaos
+            refreshAll();
+        });
+
+        // Start
         init();
     </script>
 </body>
