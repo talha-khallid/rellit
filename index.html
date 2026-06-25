@@ -387,6 +387,12 @@
             background: rgb(255, 255, 255);
             color: #000000;
         }
+
+        /* Faint background to show selection while editing colors */
+        .char.edit-active {
+            background-color: rgba(255, 255, 255, 0.15);
+            border-radius: 2px;
+        }
     </style>
 </head>
 <body>
@@ -588,6 +594,8 @@
             document.querySelectorAll('.word').forEach(w => {
                 w.classList.remove('active-word');
                 w.style.pointerEvents = 'none'; 
+                w.style.userSelect = 'none';
+                w.style.webkitUserSelect = 'none';
                 
                 w.querySelectorAll('.char').forEach(c => {
                     c.style.color = '';
@@ -600,7 +608,11 @@
             
             activeLineSpans.forEach(wordSpan => {
                 wordSpan.classList.add('active-word');
-                wordSpan.style.pointerEvents = 'auto'; // Only active line is selectable
+                
+                // Only allow interaction and selection if the video is paused
+                wordSpan.style.pointerEvents = isPlaying ? 'none' : 'auto'; 
+                wordSpan.style.userSelect = isPlaying ? 'none' : 'text';
+                wordSpan.style.webkitUserSelect = isPlaying ? 'none' : 'text';
                 
                 wordSpan.querySelectorAll('.char').forEach(charSpan => {
                     const color = charSpan.dataset.overrideColor || settings?.color || '#ffffff';
@@ -624,13 +636,16 @@
         function togglePlayback() {
             isPlaying = !isPlaying;
             const btn = document.getElementById('play-pause-btn');
+            
             if (isPlaying) {
                 btn.innerText = "Pause";
+                window.getSelection().removeAllRanges(); // Force clear native highlight
                 currentSelectionCharIds = [];
                 playLoop();
             } else {
                 btn.innerText = "Play";
                 if (lineTimer) clearTimeout(lineTimer);
+                highlightLine(currentLineIndex); // Re-run to unlock text selection!
             }
             updateInspector(); // Refresh disabled states
         }
@@ -660,16 +675,35 @@
 
         // --- Text Selection Logic ---
 
+        let ignoreSelectionChange = false;
+
+        function updateCustomSelectionVisuals() {
+            document.querySelectorAll('.char.edit-active').forEach(c => c.classList.remove('edit-active'));
+            
+            // Only apply the faint background if we have a selection but the native blue/white highlight is gone
+            const selection = window.getSelection();
+            if (currentSelectionCharIds.length > 0 && (selection.rangeCount === 0 || selection.isCollapsed)) {
+                currentSelectionCharIds.forEach(id => {
+                    const span = document.querySelector(`[data-char-id="${id}"]`);
+                    if(span) span.classList.add('edit-active');
+                });
+            }
+        }
+
         function setupSelectionListener() {
             document.addEventListener('selectionchange', () => {
+                if (ignoreSelectionChange) return;
+
                 const selection = window.getSelection();
                 const track = document.getElementById('caption-track');
                 
                 if (!selection.rangeCount || !track.contains(selection.anchorNode)) return;
 
+                // Organic click on text to clear selection
                 if (selection.isCollapsed) {
                     if (currentSelectionCharIds.length > 0) {
                         currentSelectionCharIds = [];
+                        updateCustomSelectionVisuals();
                         updateInspector();
                     }
                     return;
@@ -687,10 +721,27 @@
                 const selectionChanged = JSON.stringify(selectedIds) !== JSON.stringify(currentSelectionCharIds);
                 if (selectionChanged && selectedIds.length > 0) {
                     currentSelectionCharIds = selectedIds;
+                    updateCustomSelectionVisuals();
                     if (!isPlaying) updateInspector();
                 }
             });
         }
+
+        // --- Click Outside to Deselect ---
+        document.addEventListener('mousedown', (e) => {
+            // Ignore if clicking inside the right sidebar, play button, or directly on the active text
+            if (e.target.closest('.right-sidebar') || e.target.closest('.word.active-word') || e.target.closest('#play-pause-btn')) return;
+
+            // If clicking empty background, force clear the selection
+            ignoreSelectionChange = true;
+            window.getSelection().removeAllRanges();
+            if (currentSelectionCharIds.length > 0) {
+                currentSelectionCharIds = [];
+                updateCustomSelectionVisuals();
+                updateInspector();
+            }
+            setTimeout(() => ignoreSelectionChange = false, 50);
+        });
 
         // --- Color Utilities ---
         
@@ -787,7 +838,12 @@
                     }
                 });
 
-                const clearNativeSelection = () => window.getSelection().removeAllRanges();
+                const clearNativeSelection = () => {
+                    ignoreSelectionChange = true;
+                    window.getSelection().removeAllRanges();
+                    updateCustomSelectionVisuals(); // Triggers the faint background
+                    setTimeout(() => ignoreSelectionChange = false, 50);
+                };
 
                 hueSlider.addEventListener('mousedown', clearNativeSelection);
                 hueSlider.addEventListener('input', (e) => {
