@@ -8,14 +8,18 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
         :root {
-            --bg-main: #050505;
-            --bg-sidebar: #0c0c0c;
-            --bg-input: #161616;
-            --text-main: #e0e0e0;
-            --text-muted: #555;
-            --border: #222;
-            --accent: #4a90e2;
-            --danger: #d93025;
+            /* Sleek CapCut Professional Palette */
+            --bg-main: #000000;
+            --bg-sidebar: #0f0f0f;
+            --bg-input: #1a1a1a;
+            --text-main: #e8e8e8;
+            --text-muted: #888888;
+            --border: #222222;
+            --accent: #2b6aed;
+            --accent-hover: #3b7afc;
+            --danger: #ef4444;
+            --track-text: #ea580c;
+            --track-audio: #1d4ed8;
         }
 
         /* --- Clean Scrollbars --- */
@@ -27,11 +31,11 @@
             background: transparent;
         }
         ::-webkit-scrollbar-thumb {
-            background: #2a2a2a;
+            background: #333;
             border-radius: 10px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #444;
+            background: #555;
         }
 
         body, html {
@@ -53,11 +57,20 @@
             -webkit-user-select: auto;
         }
 
-        .editor-container {
+        /* --- New App Layout Containers --- */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .main-workspace {
             display: flex;
             width: 100%;
-            height: 100%;
-            justify-content: space-between;
+            flex: 1;
+            min-height: 0;
         }
 
         .sidebar {
@@ -66,7 +79,7 @@
             max-width: 50vw;
             flex-shrink: 0; 
             background-color: var(--bg-sidebar);
-            padding: 40px 30px;
+            padding: 30px;
             box-sizing: border-box;
             overflow-y: auto;
             overflow-x: hidden;
@@ -91,11 +104,12 @@
         .sidebar h2 {
             margin-top: 0;
             color: #fff;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 40px;
+            letter-spacing: 1.5px;
+            margin-bottom: 30px;
+            opacity: 0.9;
         }
 
         .center-preview {
@@ -105,17 +119,20 @@
             align-items: center;
             background-color: var(--bg-main);
             min-width: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow: hidden;
         }
         
         .segment-item {
-            padding: 20px 0;
+            padding: 16px 0;
             border-bottom: 1px solid var(--border);
             position: relative;
         }
 
         .segment-text {
-            font-size: 14px;
-            color: #ccc;
+            font-size: 13px;
+            color: #d1d1d1;
             margin: 0 0 8px 0;
             line-height: 1.5;
         }
@@ -134,7 +151,7 @@
 
         .btn-action {
             background: var(--bg-input);
-            border: 1px solid var(--border);
+            border: 1px solid transparent;
             color: var(--text-muted);
             padding: 6px 12px;
             font-size: 11px;
@@ -145,8 +162,8 @@
             letter-spacing: 0.5px;
             font-weight: 500;
         }
-        .btn-action:hover { color: #fff; border-color: #444; }
-        .btn-action.delete:hover { color: var(--danger); border-color: var(--danger); }
+        .btn-action:hover { color: #fff; background: #333; }
+        .btn-action.delete:hover { color: var(--danger); }
 
         .add-section {
             margin-top: auto;
@@ -157,7 +174,7 @@
             display: block;
             font-size: 11px;
             color: var(--text-muted);
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             font-weight: 500;
@@ -175,7 +192,12 @@
             font-family: inherit;
             font-size: 13px;
             outline: none;
-            transition: border-color 0.2s;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        input[type="range"] {
+            margin-bottom: 0;
+            accent-color: var(--accent);
         }
 
         input:disabled, textarea:disabled {
@@ -184,7 +206,8 @@
         }
 
         input:focus:not(:disabled), textarea:focus:not(:disabled) {
-            border-color: #333;
+            border-color: #444;
+            background: #222;
         }
 
         textarea {
@@ -195,30 +218,18 @@
 
         button.primary-btn {
             cursor: pointer;
-            background: #fff;
-            color: #000;
-            font-weight: 600;
+            background: var(--accent);
+            color: #fff;
+            font-weight: 500;
             border: none;
             padding: 12px;
             border-radius: 6px;
             width: 100%;
-            transition: opacity 0.2s;
+            transition: background 0.2s;
             font-size: 13px;
         }
 
-        button.primary-btn:hover { opacity: 0.85; }
-        
-        button.play-btn {
-            background: transparent;
-            color: #fff;
-            border: 1px solid var(--border);
-            margin-bottom: 30px;
-            font-size: 11px;
-            letter-spacing: 1.5px;
-            padding: 14px;
-            cursor: pointer;
-        }
-        button.play-btn:hover { border-color: #444; background: var(--bg-input); }
+        button.primary-btn:hover { background: var(--accent-hover); }
 
         button.btn-ghost {
             background: transparent;
@@ -230,13 +241,14 @@
             padding: 12px;
             width: 100%;
             border-radius: 6px;
+            transition: all 0.2s;
         }
-        button.btn-ghost:hover:not(:disabled) { border-color: #444; color: #fff; }
+        button.btn-ghost:hover:not(:disabled) { border-color: #444; color: #fff; background: #1a1a1a; }
         button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .context-label {
             font-size: 11px;
-            color: var(--accent);
+            color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 1.5px;
             margin-bottom: 8px;
@@ -245,14 +257,14 @@
         }
 
         .context-title {
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 500;
             margin: 0 0 25px 0;
             color: #fff;
         }
 
         .prop-group {
-            margin-bottom: 30px;
+            margin-bottom: 24px;
         }
 
         .custom-color-picker {
@@ -317,26 +329,28 @@
             margin: 0 !important;
         }
         .hex-text-input:focus {
-            border-color: #444;
+            border-color: #555;
         }
 
         .mobile-screen {
-            width: 100%;
-            max-width: 521px;
-            height: 100vh;
-            background-color: #080808; 
+            width: 1080px;
+            height: 1920px;
+            background-color: #050505; 
             box-sizing: border-box;
             display: flex;
             align-items: center;
-            position: relative;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: top left;
         }
 
         .caption-wrapper {
             width: 100%;
-            padding-left: 26px;
-            padding-right: 76px; 
+            padding-left: 54px;
+            padding-right: 157px; 
             box-sizing: border-box;
-            font-size: 21px; 
+            font-size: 43.5px; 
             line-height: 1.45;
         }
 
@@ -361,9 +375,7 @@
             text-align: left;
         }
 
-        .word {
-            display: inline;
-        }
+        .word { display: inline; }
 
         .char {
             font-weight: 500;
@@ -386,50 +398,269 @@
             background-color: rgba(255, 255, 255, 0.15);
             border-radius: 2px;
         }
+
+        /* --- Timeline UI --- */
+        .timeline-container {
+            height: 240px;
+            background: var(--bg-sidebar);
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+        .timeline-header {
+            padding: 8px 20px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #0a0a0a;
+        }
+        .timeline-scroll-area {
+            flex: 1;
+            overflow-x: auto;
+            overflow-y: hidden;
+            position: relative;
+            padding: 30px 20px 20px 20px; 
+        }
+        .timeline-content {
+            height: 100%;
+            position: relative;
+            min-width: 100%;
+        }
+        .time-ruler {
+            position: absolute;
+            top: -20px;
+            left: 0;
+            height: 20px;
+            width: 100%;
+            border-bottom: 1px solid #333;
+        }
+        .ruler-tick {
+            position: absolute;
+            bottom: 0;
+            height: 6px;
+            width: 1px;
+            background: #444;
+        }
+        .ruler-tick span {
+            position: absolute;
+            top: -14px;
+            left: 4px;
+            font-size: 9px;
+            color: #666;
+            font-family: monospace;
+        }
+        .track {
+            height: 36px;
+            margin-bottom: 12px;
+            position: relative;
+            background: rgba(255,255,255,0.02);
+            border-radius: 4px;
+        }
+        .track::before {
+            content: attr(data-label);
+            position: sticky;
+            left: 10px;
+            top: 0;
+            line-height: 36px;
+            font-size: 10px;
+            color: #555;
+            z-index: 5;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            pointer-events: none;
+            font-weight: 600;
+        }
+        .timeline-block {
+            position: absolute;
+            height: 100%;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            box-sizing: border-box;
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            z-index: 10;
+            transition: filter 0.2s;
+            font-weight: 500;
+        }
+        .audio-block {
+            background: var(--track-audio);
+            color: #dbeafe;
+            pointer-events: none; 
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+        .text-block {
+            background: var(--track-text);
+            color: #fff;
+            cursor: pointer;
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+        .text-block:hover {
+            filter: brightness(1.1);
+        }
+        .text-block.active {
+            filter: brightness(1.15);
+            z-index: 15;
+            box-shadow: 0 0 0 2px #fff;
+        }
+        .resize-handle-right {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 10px;
+            height: 100%;
+            cursor: col-resize;
+            background: rgba(0,0,0,0.1);
+            border-left: 1px solid rgba(255,255,255,0.2);
+        }
+        .text-block.active .resize-handle-right {
+            background: rgba(255,255,255,0.2);
+        }
+        .playhead {
+            position: absolute;
+            top: -20px;
+            bottom: -10px;
+            width: 1px;
+            background: #ffffff;
+            z-index: 100;
+            pointer-events: auto;
+            cursor: ew-resize;
+            box-shadow: 0 0 2px rgba(0,0,0,0.5);
+        }
+        .playhead::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -4px;
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid #ffffff;
+        }
+        .playhead::after {
+            content: '';
+            position: absolute;
+            left: -15px;
+            right: -15px;
+            top: 0;
+            bottom: 0;
+            cursor: ew-resize;
+        }
+
+        /* --- Sleek Play Button --- */
+        .capcut-play-btn {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        .capcut-play-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: scale(1.05);
+        }
+        .capcut-play-btn svg {
+            fill: #ffffff;
+            width: 18px;
+            height: 18px;
+        }
+        
+        .export-section {
+            background: var(--bg-input);
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 30px;
+        }
     </style>
     <script src="https://unpkg.com/mp4-muxer/build/mp4-muxer.js"></script>
 </head>
 <body>
-    <div class="editor-container">
+    <div class="app-container">
         
-        <div class="sidebar">
-            <h2>Segments</h2>
-            <button class="play-btn" id="play-pause-btn" onclick="togglePlayback()">Pause</button>
-            
-            <div class="export-section" style="margin-bottom: 30px; padding: 20px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-input);">
-                <label style="margin-bottom: 15px; color: #fff; font-size: 13px;">Export to MP4</label>
-                <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
-                    <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">FPS:</span>
-                    <input type="number" id="export-fps" min="20" max="60" value="60" style="margin-bottom: 0; padding: 8px; width: 80px;">
-                </div>
-                <button class="primary-btn" id="export-btn" onclick="startExport()" style="background: var(--accent); color: #fff; border: none;">Export Video</button>
-                <div id="export-progress" style="font-size: 11px; color: var(--accent); margin-top: 15px; display: none; text-transform: uppercase; letter-spacing: 1px;"></div>
-            </div>
-
-            <div id="segments-list"></div>
-
-            <div class="add-section">
-                <label>Add New Text</label>
-                <textarea id="new-text-input" placeholder="Type new text here..." rows="3"></textarea>
-                <input type="number" id="new-duration-input" step="0.5" value="5.0" placeholder="Duration (s)">
-                <input type="file" id="new-audio-input" accept="audio/*" style="font-size: 11px; margin-bottom: 20px; color: var(--text-muted); width: 100%;">
-                <button class="primary-btn" onclick="addSegment()">Add Segment</button>
-            </div>
-        </div>
-
-        <div class="center-preview">
-            <div class="mobile-screen">
-                <div class="caption-wrapper">
-                    <div class="caption-scroll-container" id="scroll-container">
-                        <div class="caption-track" id="caption-track"></div>
+        <div class="main-workspace">
+            <div class="sidebar">
+                <h2>Segments</h2>
+                
+                <div class="export-section">
+                    <label style="margin-bottom: 12px; color: #fff; font-size: 12px;">Export to MP4</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
+                        <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">FPS:</span>
+                        <input type="number" id="export-fps" min="20" max="60" value="60" style="margin-bottom: 0; padding: 8px; width: 80px;">
                     </div>
+                    <button class="primary-btn" id="export-btn" onclick="startExport()">Export Video</button>
+                    <div id="export-progress" style="font-size: 11px; color: var(--accent); margin-top: 15px; display: none; text-transform: uppercase; letter-spacing: 1px;"></div>
                 </div>
+
+                <div id="segments-list"></div>
+
+                <div class="add-section">
+                    <label>Add New Text</label>
+                    <textarea id="new-text-input" placeholder="Type new text here..." rows="3"></textarea>
+                    <input type="number" id="new-duration-input" step="0.5" value="5.0" placeholder="Duration (s)">
+                    <input type="file" id="new-audio-input" accept="audio/*" style="font-size: 11px; margin-bottom: 20px; color: var(--text-muted); width: 100%;">
+                    <button class="primary-btn" onclick="addSegment()">Add Segment</button>
+                </div>
+            </div>
+
+            <div class="center-preview">
+                <div class="preview-wrapper" style="height: 100%; display: flex; flex-direction: column; align-items: center; gap: 20px; padding-bottom: 10px; box-sizing: border-box;">
+                    <div class="mobile-screen-container" style="position: relative; flex: 1; height: auto; aspect-ratio: 9/16; max-height: calc(100% - 70px); overflow: hidden; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
+                        <div class="mobile-screen" id="mobile-screen">
+                            <div class="caption-wrapper">
+                                <div class="caption-scroll-container" id="scroll-container">
+                                    <div class="caption-track" id="caption-track"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="capcut-play-btn" id="play-pause-btn" onclick="togglePlayback()">
+                        <svg viewBox="0 0 24 24" id="play-icon-path">
+                            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="sidebar right-sidebar">
+                <h2>Inspector</h2>
+                <div id="inspector-content"></div>
             </div>
         </div>
 
-        <div class="sidebar right-sidebar">
-            <h2>Inspector</h2>
-            <div id="inspector-content"></div>
+        <div class="timeline-container">
+            <div class="timeline-header">
+                <span style="font-weight: 500;">Timeline Sync</span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="margin: 0; font-size: 10px; opacity: 0.6;">ZOOM</label>
+                    <input type="range" id="timeline-zoom" min="20" max="250" value="70" style="width: 100px; height: 4px;">
+                </div>
+            </div>
+            <div class="timeline-scroll-area" id="timeline-scroll-area">
+                <div class="timeline-content" id="timeline-content">
+                    <div class="time-ruler" id="time-ruler"></div>
+                    <div class="playhead" id="playhead"></div>
+                    <div class="track audio-track" id="audio-track" data-label="Audio"></div>
+                    <div class="track text-track" id="text-track" data-label="Text Lines"></div>
+                </div>
+            </div>
         </div>
 
     </div>
@@ -462,7 +693,26 @@
         let currentlyPlayingSegIdx = -1;
         let globalAudioObj = null;
 
+        let TIMELINE_SCALE = 70; 
+        let currentLineStartSysTime = performance.now();
+        let currentLineStartTimeSeconds = 0;
+        let isResizingTimeline = false;
+        let resizeLineIdx = -1;
+        let startX = 0;
+        let initialDur = 0;
+
+        function updateScreenScale() {
+            const container = document.querySelector('.mobile-screen-container');
+            const screen = document.getElementById('mobile-screen');
+            if(container && screen) {
+                const scale = container.clientHeight / 1920;
+                screen.style.transform = `scale(${scale})`;
+            }
+        }
+        window.addEventListener('resize', updateScreenScale);
+
         async function init() {
+            updateScreenScale();
             try {
                 const res = await fetch('captions.json');
                 if (res.ok) segments = await res.json();
@@ -471,6 +721,8 @@
             refreshAll();
             setupScrubbing();
             setupSelectionListener();
+            setupTimelineEvents();
+            requestAnimationFrame(animationLoop);
         }
 
         function refreshAll() {
@@ -480,6 +732,7 @@
             setTimeout(() => {
                 calculateLines();
                 initializeLineSettings();
+                renderTimeline();
                 updateInspector(); 
                 
                 if (isPlaying) {
@@ -514,11 +767,7 @@
                         charSpan.className = 'char';
                         charSpan.textContent = char;
                         charSpan.dataset.charId = globalCharIndex;
-                        
-                        if (charOverrides[globalCharIndex]) {
-                            charSpan.dataset.overrideColor = charOverrides[globalCharIndex];
-                        }
-                        
+                        if (charOverrides[globalCharIndex]) charSpan.dataset.overrideColor = charOverrides[globalCharIndex];
                         wordSpan.appendChild(charSpan);
                         globalCharIndex++;
                     });
@@ -527,9 +776,7 @@
                     spaceSpan.className = 'char space';
                     spaceSpan.textContent = ' ';
                     spaceSpan.dataset.charId = globalCharIndex;
-                    if (charOverrides[globalCharIndex]) {
-                        spaceSpan.dataset.overrideColor = charOverrides[globalCharIndex];
-                    }
+                    if (charOverrides[globalCharIndex]) spaceSpan.dataset.overrideColor = charOverrides[globalCharIndex];
                     wordSpan.appendChild(spaceSpan);
                     globalCharIndex++;
                     
@@ -569,10 +816,7 @@
                 if (!lineSettings[index]) {
                     let baseDur = 0;
                     line.forEach(span => baseDur += parseFloat(span.dataset.baseDuration));
-                    lineSettings[index] = {
-                        color: '#ffffff',
-                        duration: baseDur.toFixed(2)
-                    };
+                    lineSettings[index] = { color: '#ffffff', duration: baseDur.toFixed(2) };
                 }
             });
             Object.keys(lineSettings).forEach(key => {
@@ -602,9 +846,7 @@
                     });
                     
                     if (currentTotal <= 0) {
-                        lines.forEach(lineIdx => {
-                            lineSettings[lineIdx].duration = (seg.audioDuration / lines.length).toFixed(2);
-                        });
+                        lines.forEach(lineIdx => { lineSettings[lineIdx].duration = (seg.audioDuration / lines.length).toFixed(2); });
                         continue;
                     }
 
@@ -635,6 +877,12 @@
             
             if (currentLineIndex >= visualLines.length) currentLineIndex = 0;
             
+            currentLineStartTimeSeconds = 0;
+            for(let i=0; i<currentLineIndex; i++) {
+                currentLineStartTimeSeconds += parseFloat(lineSettings[i].duration);
+            }
+            currentLineStartSysTime = performance.now();
+
             const currentSegIdx = visualLines[currentLineIndex][0].dataset.segIndex;
             
             if (currentSegIdx !== currentlyPlayingSegIdx) {
@@ -679,7 +927,6 @@
                 w.style.pointerEvents = 'none'; 
                 w.style.userSelect = 'none';
                 w.style.webkitUserSelect = 'none';
-                
                 w.querySelectorAll('.char').forEach(c => {
                     c.style.color = '';
                     c.style.textShadow = '';
@@ -710,20 +957,226 @@
             
             const translation = (containerHeight / 2) - (lineTop + lineHeight / 2);
             track.style.transform = `translateY(${translation}px)`;
+
+            updateTimelineHighlight(index);
+        }
+
+        function renderTimeline() {
+            const trackAudio = document.getElementById('audio-track');
+            const trackText = document.getElementById('text-track');
+            const ruler = document.getElementById('time-ruler');
+            const content = document.getElementById('timeline-content');
+            
+            trackAudio.innerHTML = '';
+            trackText.innerHTML = '';
+            ruler.innerHTML = '';
+            
+            let totalTime = 0;
+            const lineStartTimes = [];
+            
+            for (let i = 0; i < visualLines.length; i++) {
+                lineStartTimes.push(totalTime);
+                const dur = parseFloat(lineSettings[i]?.duration || 0.1);
+                
+                const block = document.createElement('div');
+                block.className = `timeline-block text-block ${i === currentLineIndex ? 'active' : ''}`;
+                block.style.left = `${totalTime * TIMELINE_SCALE}px`;
+                block.style.width = `${dur * TIMELINE_SCALE}px`;
+                block.innerText = `Line ${i + 1}`;
+                
+                block.addEventListener('mousedown', (e) => {
+                    if(e.target.classList.contains('resize-handle-right')) return;
+                    if (isPlaying) togglePlayback();
+                    currentLineIndex = i;
+                    highlightLine(i);
+                    updateInspector();
+                });
+                
+                const handle = document.createElement('div');
+                handle.className = 'resize-handle-right';
+                handle.addEventListener('mousedown', (e) => {
+                    isResizingTimeline = true;
+                    resizeLineIdx = i;
+                    startX = e.clientX;
+                    initialDur = parseFloat(lineSettings[i].duration);
+                    e.stopPropagation();
+                });
+                block.appendChild(handle);
+                
+                trackText.appendChild(block);
+                totalTime += dur;
+            }
+            
+            content.style.width = `${Math.max(100, totalTime * TIMELINE_SCALE + 100)}px`;
+            
+            let currentSegIdx = -1;
+            let audioBlockStart = 0;
+            let audioBlockDur = 0;
+            let hasAudio = false;
+            
+            for (let i = 0; i < visualLines.length; i++) {
+                const segIdx = parseInt(visualLines[i][0].dataset.segIndex);
+                const dur = parseFloat(lineSettings[i]?.duration || 0);
+                const seg = segments[segIdx];
+                
+                if (currentSegIdx !== segIdx) {
+                    if (currentSegIdx !== -1 && hasAudio) {
+                        const ab = document.createElement('div');
+                        ab.className = 'timeline-block audio-block';
+                        ab.style.left = `${audioBlockStart * TIMELINE_SCALE}px`;
+                        ab.style.width = `${audioBlockDur * TIMELINE_SCALE}px`;
+                        ab.innerText = `Audio ${currentSegIdx + 1}`;
+                        trackAudio.appendChild(ab);
+                    }
+                    currentSegIdx = segIdx;
+                    audioBlockStart = lineStartTimes[i];
+                    audioBlockDur = dur;
+                    hasAudio = !!seg.audioBuffer;
+                } else {
+                    audioBlockDur += dur;
+                }
+            }
+            if (currentSegIdx !== -1 && hasAudio) {
+                const ab = document.createElement('div');
+                ab.className = 'timeline-block audio-block';
+                ab.style.left = `${audioBlockStart * TIMELINE_SCALE}px`;
+                ab.style.width = `${audioBlockDur * TIMELINE_SCALE}px`;
+                ab.innerText = `Audio ${currentSegIdx + 1}`;
+                trackAudio.appendChild(ab);
+            }
+            
+            const numTicks = Math.ceil(totalTime) + 2;
+            for(let i=0; i<numTicks; i++) {
+                const tick = document.createElement('div');
+                tick.className = 'ruler-tick';
+                tick.style.left = `${i * TIMELINE_SCALE}px`;
+                const label = document.createElement('span');
+                label.innerText = i + 's';
+                tick.appendChild(label);
+                ruler.appendChild(tick);
+            }
+        }
+
+        function updateTimelineHighlight(index) {
+            document.querySelectorAll('.text-block').forEach((b, i) => {
+                if(i === index) b.classList.add('active');
+                else b.classList.remove('active');
+            });
+        }
+
+        let isDraggingPlayhead = false;
+
+        function seekTimeline(e) {
+            const rect = document.getElementById('timeline-content').getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const targetTime = Math.max(0, clickX / TIMELINE_SCALE);
+            
+            let timeAccumulator = 0;
+            let targetLineIndex = visualLines.length - 1;
+            
+            for(let i=0; i<visualLines.length; i++) {
+                const dur = parseFloat(lineSettings[i].duration);
+                if (targetTime >= timeAccumulator && targetTime <= timeAccumulator + dur) {
+                    targetLineIndex = i;
+                    break;
+                }
+                timeAccumulator += dur;
+            }
+
+            if (targetTime === 0) targetLineIndex = 0;
+            
+            currentLineIndex = targetLineIndex;
+            currentSelectionCharIds = [];
+            
+            if (isPlaying) {
+                if (lineTimer) clearTimeout(lineTimer);
+                currentlyPlayingSegIdx = -1;
+                playLoop();
+            } else {
+                highlightLine(currentLineIndex);
+                updateInspector();
+                const playhead = document.getElementById('playhead');
+                if (playhead) playhead.style.left = `${targetTime * TIMELINE_SCALE}px`;
+            }
+        }
+
+        function setupTimelineEvents() {
+            const timelineContent = document.getElementById('timeline-content');
+            const playhead = document.getElementById('playhead');
+
+            playhead.addEventListener('mousedown', (e) => {
+                isDraggingPlayhead = true;
+                if (isPlaying) togglePlayback();
+                e.stopPropagation();
+            });
+
+            timelineContent.addEventListener('mousedown', (e) => {
+                if (e.target.closest('.resize-handle-right')) return;
+                isDraggingPlayhead = true;
+                if (isPlaying) togglePlayback();
+                seekTimeline(e);
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if(isResizingTimeline) {
+                    let deltaX = e.clientX - startX;
+                    let deltaDur = deltaX / TIMELINE_SCALE;
+                    let newDur = Math.max(0.1, initialDur + deltaDur);
+                    
+                    updateLineDuration(resizeLineIdx, newDur.toFixed(2));
+                    renderTimeline();
+                    if(!isPlaying) updateInspector(); 
+                } else if (isDraggingPlayhead) {
+                    seekTimeline(e);
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if(isResizingTimeline) {
+                    isResizingTimeline = false;
+                    if(!isPlaying) highlightLine(currentLineIndex);
+                }
+                if(isDraggingPlayhead) {
+                    isDraggingPlayhead = false;
+                }
+            });
+
+            document.getElementById('timeline-zoom').addEventListener('input', (e) => {
+                TIMELINE_SCALE = parseInt(e.target.value);
+                renderTimeline();
+            });
+        }
+
+        function animationLoop() {
+            requestAnimationFrame(animationLoop);
+            const playhead = document.getElementById('playhead');
+            if(!playhead || visualLines.length === 0) return;
+            
+            if(isPlaying) {
+                const elapsed = (performance.now() - currentLineStartSysTime) / 1000;
+                let currentVidTime = currentLineStartTimeSeconds + Math.max(0, elapsed);
+                playhead.style.left = `${currentVidTime * TIMELINE_SCALE}px`;
+            } else {
+                let time = 0;
+                for(let i=0; i<currentLineIndex; i++) {
+                    time += parseFloat(lineSettings[i].duration);
+                }
+                playhead.style.left = `${time * TIMELINE_SCALE}px`;
+            }
         }
 
         function togglePlayback() {
             isPlaying = !isPlaying;
-            const btn = document.getElementById('play-pause-btn');
+            const iconPath = document.querySelector('#play-icon-path path');
             
             if (isPlaying) {
-                btn.innerText = "Pause";
+                if (iconPath) iconPath.setAttribute('d', 'M6 19h4V5H6v14zm8-14v14h4V5h-4z');
                 window.getSelection().removeAllRanges(); 
                 currentSelectionCharIds = [];
                 currentlyPlayingSegIdx = -1;
                 playLoop();
             } else {
-                btn.innerText = "Play";
+                if (iconPath) iconPath.setAttribute('d', 'M8 5v14l11-7z');
                 if (globalAudioObj) globalAudioObj.pause();
                 if (lineTimer) clearTimeout(lineTimer);
                 highlightLine(currentLineIndex); 
@@ -758,7 +1211,6 @@
 
         function updateCustomSelectionVisuals() {
             document.querySelectorAll('.char.edit-active').forEach(c => c.classList.remove('edit-active'));
-            
             const selection = window.getSelection();
             if (currentSelectionCharIds.length > 0 && (selection.rangeCount === 0 || selection.isCollapsed)) {
                 currentSelectionCharIds.forEach(id => {
@@ -771,10 +1223,8 @@
         function setupSelectionListener() {
             document.addEventListener('selectionchange', () => {
                 if (ignoreSelectionChange) return;
-
                 const selection = window.getSelection();
                 const track = document.getElementById('caption-track');
-                
                 if (!selection.rangeCount || !track.contains(selection.anchorNode)) return;
 
                 if (selection.isCollapsed) {
@@ -788,11 +1238,8 @@
 
                 const charSpans = track.querySelectorAll('.char');
                 const selectedIds = [];
-                
                 charSpans.forEach(span => {
-                    if (selection.containsNode(span, true)) {
-                        selectedIds.push(span.dataset.charId);
-                    }
+                    if (selection.containsNode(span, true)) selectedIds.push(span.dataset.charId);
                 });
 
                 const selectionChanged = JSON.stringify(selectedIds) !== JSON.stringify(currentSelectionCharIds);
@@ -805,7 +1252,7 @@
         }
 
         document.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.right-sidebar') || e.target.closest('.word.active-word') || e.target.closest('#play-pause-btn')) return;
+            if (e.target.closest('.right-sidebar') || e.target.closest('.word.active-word') || e.target.closest('#play-pause-btn') || e.target.closest('.timeline-container')) return;
 
             ignoreSelectionChange = true;
             window.getSelection().removeAllRanges();
@@ -855,7 +1302,6 @@
         function renderCustomColorPicker(mountId, initialHex, onChangeCallback) {
             const container = document.getElementById(mountId);
             let { h, s, v } = hexToHsv(initialHex || '#ffffff');
-            
             const disabledStyle = isPlaying ? "opacity: 0.4; pointer-events: none;" : "";
 
             container.innerHTML = `
@@ -866,7 +1312,6 @@
                     <div style="margin-top: 15px; margin-bottom: 20px;">
                         <input type="range" class="hue-slider" id="hue-slider-${mountId}" min="0" max="360" value="${h}">
                     </div>
-                    
                     <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
                         <div id="color-preview-${mountId}" style="width: 32px; height: 32px; border-radius: 6px; background: ${initialHex}; border: 1px solid var(--border); flex-shrink: 0;"></div>
                         <input type="text" id="hex-input-${mountId}" value="${initialHex.toUpperCase()}" class="hex-text-input">
@@ -904,9 +1349,7 @@
                         area.style.backgroundColor = `hsl(${h}, 100%, 50%)`;
                         preview.style.backgroundColor = val;
                         onChangeCallback(val);
-                    } else {
-                        hexInput.value = hsvToHex(h, s, v).toUpperCase(); 
-                    }
+                    } else hexInput.value = hsvToHex(h, s, v).toUpperCase(); 
                 });
 
                 const clearNativeSelection = () => {
@@ -917,10 +1360,7 @@
                 };
 
                 hueSlider.addEventListener('mousedown', clearNativeSelection);
-                hueSlider.addEventListener('input', (e) => {
-                    h = parseFloat(e.target.value);
-                    emitColor();
-                });
+                hueSlider.addEventListener('input', (e) => { h = parseFloat(e.target.value); emitColor(); });
 
                 area.addEventListener('mousedown', (e) => {
                     isDragging = true;
@@ -928,26 +1368,17 @@
                     updateFromMouse(e);
                 });
 
-                const onMouseMove = (e) => {
-                    if (!isDragging) return;
-                    updateFromMouse(e);
-                };
-                
+                const onMouseMove = (e) => { if (isDragging) updateFromMouse(e); };
                 const onMouseUp = () => { isDragging = false; };
-
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
 
                 function updateFromMouse(e) {
                     const rect = area.getBoundingClientRect();
-                    let x = e.clientX - rect.left;
-                    let y = e.clientY - rect.top;
-                    x = Math.max(0, Math.min(x, rect.width));
-                    y = Math.max(0, Math.min(y, rect.height));
-
+                    let x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+                    let y = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
                     s = (x / rect.width) * 100;
                     v = 100 - ((y / rect.height) * 100);
-
                     dot.style.left = `${s}%`;
                     dot.style.top = `${100 - v}%`;
                     emitColor();
@@ -962,33 +1393,25 @@
 
         function updateInspector() {
             const container = document.getElementById('inspector-content');
-            if (container.cleanupPicker) {
-                container.cleanupPicker();
-                container.cleanupPicker = null;
-            }
+            if (container.cleanupPicker) { container.cleanupPicker(); container.cleanupPicker = null; }
             container.innerHTML = '';
 
             const disabledNotice = isPlaying 
-                ? `<div style="background: var(--bg-input); padding: 10px; border-radius: 6px; border: 1px solid var(--border); color: var(--accent); font-size: 11px; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.5px;">⏸ Pause playback to edit</div>`
+                ? `<div style="background: var(--bg-input); padding: 10px; border-radius: 6px; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.5px;">⏸ Pause playback to edit</div>`
                 : '';
 
-            if (currentSelectionCharIds.length > 0) {
-                renderSelectionInspector(container, disabledNotice);
-            } else {
-                renderLineInspector(container, disabledNotice);
-            }
+            if (currentSelectionCharIds.length > 0) renderSelectionInspector(container, disabledNotice);
+            else renderLineInspector(container, disabledNotice);
         }
 
         function renderLineInspector(container, disabledNotice) {
             const lineIdx = currentLineIndex;
             if (!lineSettings[lineIdx]) return;
-
             const activeLine = visualLines[lineIdx];
             if (!activeLine || activeLine.length === 0) return;
 
             const segIndex = activeLine[0].dataset.segIndex;
             const segText = segments[segIndex].text;
-
             const disabledAttr = isPlaying ? "disabled" : "";
 
             container.innerHTML = `
@@ -1011,51 +1434,42 @@
             `;
 
             if (!isPlaying) {
-                const textEditor = document.getElementById('line-text-editor');
-                textEditor.addEventListener('input', (e) => updateSegmentText(segIndex, e.target.value));
-
+                document.getElementById('line-text-editor').addEventListener('input', (e) => updateSegmentText(segIndex, e.target.value));
                 document.getElementById('line-duration-input').addEventListener('change', (e) => {
                     updateLineDuration(lineIdx, e.target.value);
                     e.target.value = lineSettings[lineIdx].duration;
+                    renderTimeline();
                 });
             }
 
-            renderCustomColorPicker('picker-mount-line', lineSettings[lineIdx].color, (color) => {
-                updateLineColor(lineIdx, color);
-            });
+            renderCustomColorPicker('picker-mount-line', lineSettings[lineIdx].color, (color) => { updateLineColor(lineIdx, color); });
         }
 
         function renderSelectionInspector(container, disabledNotice) {
             const firstSpan = document.querySelector(`[data-char-id="${currentSelectionCharIds[0]}"]`);
             const firstCharColor = firstSpan?.dataset.overrideColor || lineSettings[currentLineIndex]?.color || '#ffffff';
-
             const disabledAttr = isPlaying ? "disabled" : "";
 
             container.innerHTML = `
                 ${disabledNotice}
                 <span class="context-label">Selection Override</span>
                 <h3 class="context-title">${currentSelectionCharIds.length} Letters</h3>
-                
                 <label>Highlight Color</label>
                 <div id="picker-mount-selection"></div>
-                
                 <button class="btn-ghost" onclick="clearSelectionOverrides()" ${disabledAttr}>Reset to Line Color</button>
                 <button class="btn-ghost" onclick="deselectAll()" ${disabledAttr}>Deselect</button>
             `;
-
-            renderCustomColorPicker('picker-mount-selection', firstCharColor, (color) => {
-                updateSelectionColor(color);
-            });
+            renderCustomColorPicker('picker-mount-selection', firstCharColor, (color) => { updateSelectionColor(color); });
         }
 
         function updateSegmentText(segIndex, newText) {
             segments[segIndex].text = newText;
             renderSegmentsToDOM(); 
-            
             requestAnimationFrame(() => {
                 calculateLines();
                 initializeLineSettings();
                 highlightLine(currentLineIndex); 
+                renderTimeline();
             });
         }
 
@@ -1068,14 +1482,11 @@
 
             if (seg.audioDuration !== null && seg.audioDuration !== undefined) {
                 const segmentLineIndices = [];
-                visualLines.forEach((line, idx) => {
-                    if (line[0].dataset.segIndex == segIdx) segmentLineIndices.push(idx);
-                });
+                visualLines.forEach((line, idx) => { if (line[0].dataset.segIndex == segIdx) segmentLineIndices.push(idx); });
 
                 if (segmentLineIndices.length > 1) {
                     const oldDur = parseFloat(lineSettings[index].duration);
                     const diff = newDur - oldDur;
-                    
                     const localIdx = segmentLineIndices.indexOf(index);
                     let targetLocalIdx = localIdx + 1;
                     if (targetLocalIdx >= segmentLineIndices.length) targetLocalIdx = localIdx - 1;
@@ -1088,7 +1499,6 @@
                         newDur = oldDur + maxAffordableDiff;
                         targetDur = 0.1;
                     }
-                    
                     lineSettings[targetIdx].duration = targetDur.toFixed(2);
                     lineSettings[index].duration = newDur.toFixed(2);
                 }
@@ -1099,9 +1509,7 @@
 
         function updateLineColor(index, val) {
             lineSettings[index].color = val;
-            if (!isPlaying && currentLineIndex === index) {
-                highlightLine(index); 
-            }
+            if (!isPlaying && currentLineIndex === index) highlightLine(index); 
         }
 
         function updateSelectionColor(color) {
@@ -1151,7 +1559,6 @@
 
         function editSegment(index) {
             if (isPlaying) togglePlayback();
-            
             const targetLineIdx = visualLines.findIndex(line => parseInt(line[0].dataset.segIndex) === index);
             if (targetLineIdx !== -1) {
                 currentSelectionCharIds = [];
@@ -1205,11 +1612,6 @@
             refreshAll();
         }
 
-        window.addEventListener('resize', () => {
-            if (isPlaying) togglePlayback();
-            refreshAll();
-        });
-
         async function startExport() {
             if (isPlaying) togglePlayback();
             
@@ -1224,15 +1626,60 @@
             progressEl.style.display = 'block';
             progressEl.innerText = "Preparing...";
 
+            // CRITICAL DOM DETACHMENT FIX
+            // Remove the screen from the UI flow entirely to prevent scaling calculation errors.
+            const screenEl = document.getElementById('mobile-screen');
+            const originalParent = screenEl.parentNode;
+            const originalNextSibling = screenEl.nextSibling;
+            
+            const originalCssText = screenEl.style.cssText;
+            const wrapperEl = document.querySelector('.caption-wrapper');
+            const origWrapperCss = wrapperEl.style.cssText;
+            const track = document.getElementById('caption-track');
+            const scrollContainer = document.getElementById('scroll-container');
+
+            document.body.appendChild(screenEl);
+
+            screenEl.style.cssText = 'width: 1080px !important; height: 1920px !important; max-width: none !important; position: absolute !important; top: 0 !important; left: 0 !important; z-index: -1000 !important; transform: scale(1) translate(0,0) !important; display: flex !important; align-items: center !important; background-color: #050505 !important; border-radius: 0 !important;';
+            wrapperEl.style.cssText += '; font-size: 43.5px !important; padding-left: 54px !important; padding-right: 157px !important;';
+            track.style.transition = 'none';
+            track.style.transform = 'translateY(0px)';
+            
+            // Force pure pixel layout update before capture
+            screenEl.getBoundingClientRect();
+            
+            const screenRect = screenEl.getBoundingClientRect();
+            const scrollRect = scrollContainer.getBoundingClientRect();
+            const scrollBox = { x: scrollRect.left - screenRect.left, y: scrollRect.top - screenRect.top, w: scrollRect.width, h: scrollRect.height };
+
+            const wordToLineIdx = new Map();
+            visualLines.forEach((lineSpans, lineIdx) => { lineSpans.forEach(wordSpan => wordToLineIdx.set(wordSpan, lineIdx)); });
+
+            const charsData = Array.from(document.querySelectorAll('.char')).map(c => {
+                const rect = c.getBoundingClientRect();
+                const wordSpan = c.closest('.word');
+                return { text: c.textContent, baseX: rect.left - screenRect.left, baseY: rect.top - screenRect.top, lineIdx: wordToLineIdx.get(wordSpan), overrideColor: c.dataset.overrideColor };
+            });
+
+            // Restore the DOM immediately to prevent UI flicker
+            screenEl.style.cssText = originalCssText;
+            wrapperEl.style.cssText = origWrapperCss;
+            track.style.transition = '';
+            
+            if (originalNextSibling) {
+                originalParent.insertBefore(screenEl, originalNextSibling);
+            } else {
+                originalParent.appendChild(screenEl);
+            }
+            highlightLine(currentLineIndex);
+
             try {
                 let totalDuration = 0;
-                for(let i=0; i<visualLines.length; i++) {
-                    totalDuration += parseFloat(lineSettings[i]?.duration || 0);
-                }
+                for(let i=0; i<visualLines.length; i++) totalDuration += parseFloat(lineSettings[i]?.duration || 0);
                 const totalFrames = Math.ceil(totalDuration * fps);
                 
                 const hasAnyAudio = segments.some(s => s.audioBuffer);
-                let EXPORT_SAMPLE_RATE = 48000; // FIX 2: Default to 48kHz (Video Standard)
+                let EXPORT_SAMPLE_RATE = 48000; 
                 let audioCodecConfig = 'mp4a.40.2';
                 let muxerAudioCodec = 'aac';
                 
@@ -1267,12 +1714,7 @@
                             segmentAudioData[i] = await audioCtx.decodeAudioData(segments[i].audioBuffer.slice(0));
                         }
                     }
-                    
-                    muxerOptions.audio = {
-                        codec: muxerAudioCodec,
-                        sampleRate: EXPORT_SAMPLE_RATE,
-                        numberOfChannels: 2
-                    };
+                    muxerOptions.audio = { codec: muxerAudioCodec, sampleRate: EXPORT_SAMPLE_RATE, numberOfChannels: 2 };
                 }
                 
                 const muxer = new Mp4Muxer.Muxer(muxerOptions);
@@ -1286,7 +1728,7 @@
                         codec: audioCodecConfig,
                         sampleRate: EXPORT_SAMPLE_RATE,
                         numberOfChannels: 2,
-                        bitrate: 256_000 // FIX 2: Increased bitrate for clearer audio
+                        bitrate: 256_000 
                     });
                 }
 
@@ -1302,46 +1744,6 @@
                     hardwareAcceleration: 'prefer-software',
                     bitrate: 10_000_000,
                     framerate: fps
-                });
-
-                const screenEl = document.querySelector('.mobile-screen');
-                const originalCssText = screenEl.style.cssText;
-                const wrapperEl = document.querySelector('.caption-wrapper');
-                const origWrapperCss = wrapperEl.style.cssText;
-                const track = document.getElementById('caption-track');
-                const scrollContainer = document.getElementById('scroll-container');
-
-                screenEl.style.cssText += '; width: 1080px !important; height: 1920px !important; max-width: 1080px !important; position: absolute; top: 0; left: 0; z-index: -1000;';
-                wrapperEl.style.cssText += '; font-size: 43.5px !important; padding-left: 54px !important; padding-right: 157px !important;';
-                track.style.transition = 'none';
-                track.style.transform = 'translateY(0px)';
-                
-                screenEl.getBoundingClientRect();
-                
-                const screenRect = screenEl.getBoundingClientRect();
-                const scrollRect = scrollContainer.getBoundingClientRect();
-                const scrollBox = {
-                    x: scrollRect.left - screenRect.left,
-                    y: scrollRect.top - screenRect.top,
-                    w: scrollRect.width,
-                    h: scrollRect.height
-                };
-
-                const wordToLineIdx = new Map();
-                visualLines.forEach((lineSpans, lineIdx) => {
-                    lineSpans.forEach(wordSpan => wordToLineIdx.set(wordSpan, lineIdx));
-                });
-
-                const charsData = Array.from(document.querySelectorAll('.char')).map(c => {
-                    const rect = c.getBoundingClientRect();
-                    const wordSpan = c.closest('.word');
-                    return {
-                        text: c.textContent,
-                        baseX: rect.left - screenRect.left,
-                        baseY: rect.top - screenRect.top,
-                        lineIdx: wordToLineIdx.get(wordSpan),
-                        overrideColor: c.dataset.overrideColor
-                    };
                 });
 
                 const offscreenCanvas = document.createElement('canvas');
@@ -1364,23 +1766,16 @@
                     let activeIdx = 0;
                     let found = false;
                     
-                    // FIX 1: Safely locate the active line without assuming missing means line 0.
                     for(let i=0; i<visualLines.length; i++) {
                         const durMs = parseFloat(lineSettings[i].duration) * 1000;
-                        if (currentTimeMs >= lineStartTimeMs && currentTimeMs < lineStartTimeMs + durMs) {
-                            activeIdx = i;
-                            found = true;
-                            break;
-                        }
+                        if (currentTimeMs >= lineStartTimeMs && currentTimeMs < lineStartTimeMs + durMs) { activeIdx = i; found = true; break; }
                         lineStartTimeMs += durMs;
                     }
                     
                     if (!found) {
                         activeIdx = visualLines.length - 1;
                         lineStartTimeMs = 0;
-                        for(let i=0; i<visualLines.length - 1; i++) {
-                            lineStartTimeMs += parseFloat(lineSettings[i].duration) * 1000;
-                        }
+                        for(let i=0; i<visualLines.length - 1; i++) lineStartTimeMs += parseFloat(lineSettings[i].duration) * 1000;
                     }
 
                     const timeInLineMs = currentTimeMs - lineStartTimeMs;
@@ -1402,7 +1797,7 @@
                     
                     let colorProgress = Math.min(timeInLineMs / 100, 1.0);
 
-                    ctx.fillStyle = '#080808';
+                    ctx.fillStyle = '#050505';
                     ctx.fillRect(0, 0, 1080, 1920);
                     
                     for(let c of charsData) {
@@ -1418,34 +1813,24 @@
                             const b = Math.round(c1.b + (c2.b - c1.b) * colorProgress);
                             charColor = `rgb(${r},${g},${b})`;
                             
-                            if (colorProgress > 0) {
-                                ctx.shadowColor = charColor;
-                                ctx.shadowBlur = 2;
-                            } else {
-                                ctx.shadowBlur = 0;
-                            }
-                        } else {
-                            ctx.shadowBlur = 0;
-                        }
+                            if (colorProgress > 0) { ctx.shadowColor = charColor; ctx.shadowBlur = 2; } 
+                            else { ctx.shadowBlur = 0; }
+                        } else { ctx.shadowBlur = 0; }
                         
                         ctx.fillStyle = charColor;
                         ctx.fillText(c.text, c.baseX, c.baseY + currentTranslation);
                     }
                     
                     ctx.shadowBlur = 0;
-                    
                     const grad = ctx.createLinearGradient(0, scrollBox.y, 0, scrollBox.y + scrollBox.h);
-                    grad.addColorStop(0, 'rgba(8, 8, 8, 1)'); 
-                    grad.addColorStop(0.15, 'rgba(8, 8, 8, 0.75)'); 
-                    grad.addColorStop(0.40, 'rgba(8, 8, 8, 0)'); 
-                    grad.addColorStop(0.60, 'rgba(8, 8, 8, 0)'); 
-                    grad.addColorStop(0.85, 'rgba(8, 8, 8, 0.75)');
-                    grad.addColorStop(1.0, 'rgba(8, 8, 8, 1)');
+                    grad.addColorStop(0, 'rgba(5, 5, 5, 1)'); grad.addColorStop(0.15, 'rgba(5, 5, 5, 0.75)'); 
+                    grad.addColorStop(0.40, 'rgba(5, 5, 5, 0)'); grad.addColorStop(0.60, 'rgba(5, 5, 5, 0)'); 
+                    grad.addColorStop(0.85, 'rgba(5, 5, 5, 0.75)'); grad.addColorStop(1.0, 'rgba(5, 5, 5, 1)');
                     
                     ctx.fillStyle = grad;
                     ctx.fillRect(0, scrollBox.y, 1080, scrollBox.h);
                     
-                    ctx.fillStyle = '#080808';
+                    ctx.fillStyle = '#050505';
                     ctx.fillRect(0, 0, 1080, scrollBox.y);
                     ctx.fillRect(0, scrollBox.y + scrollBox.h, 1080, 1920 - (scrollBox.y + scrollBox.h));
                     
@@ -1460,16 +1845,12 @@
                     progressEl.innerText = "Encoding Audio...";
                     await new Promise(r => setTimeout(r, 0));
                     
-                    const chunkFrames = 4096; // FIX 2: Reduced chunk size for stable encoding
+                    const chunkFrames = 4096; 
                     let globalTime = 0; 
                     
                     for (let segIdx = 0; segIdx < segments.length; segIdx++) {
                         let segDuration = 0;
-                        for(let i=0; i<visualLines.length; i++) {
-                            if (visualLines[i][0].dataset.segIndex == segIdx) {
-                                segDuration += parseFloat(lineSettings[i].duration);
-                            }
-                        }
+                        for(let i=0; i<visualLines.length; i++) { if (visualLines[i][0].dataset.segIndex == segIdx) segDuration += parseFloat(lineSettings[i].duration); }
                         
                         const decodedAudio = segmentAudioData[segIdx];
                         const segFrames = Math.floor(segDuration * EXPORT_SAMPLE_RATE);
@@ -1483,28 +1864,14 @@
                                 for (let c = 0; c < 2; c++) {
                                     const channelIndex = c < decodedAudio.numberOfChannels ? c : 0;
                                     const channelData = decodedAudio.getChannelData(channelIndex);
-                                    
                                     const available = Math.max(0, decodedAudio.length - offset);
                                     const copyLen = Math.min(curChunkFrames, available);
-                                    
-                                    if (copyLen > 0) {
-                                        planarData.set(channelData.subarray(offset, offset + copyLen), c * curChunkFrames);
-                                    }
+                                    if (copyLen > 0) planarData.set(channelData.subarray(offset, offset + copyLen), c * curChunkFrames);
                                 }
                             }
 
-                            const audioData = new AudioData({
-                                format: 'f32-planar',
-                                sampleRate: EXPORT_SAMPLE_RATE,
-                                numberOfChannels: 2,
-                                numberOfFrames: curChunkFrames,
-                                timestamp: (globalTime * 1000000), 
-                                data: planarData
-                            });
-                            
-                            if (audioEncoder.state === 'configured') {
-                                audioEncoder.encode(audioData);
-                            }
+                            const audioData = new AudioData({ format: 'f32-planar', sampleRate: EXPORT_SAMPLE_RATE, numberOfChannels: 2, numberOfFrames: curChunkFrames, timestamp: (globalTime * 1000000), data: planarData });
+                            if (audioEncoder.state === 'configured') audioEncoder.encode(audioData);
                             audioData.close();
                             
                             offset += curChunkFrames;
@@ -1529,12 +1896,6 @@
                 URL.revokeObjectURL(url);
                 
                 progressEl.innerText = "Export Complete!";
-                
-                screenEl.style.cssText = originalCssText;
-                wrapperEl.style.cssText = origWrapperCss;
-                track.style.transition = '';
-                highlightLine(currentLineIndex);
-
             } catch (err) {
                 console.error(err);
                 progressEl.innerText = "Error: " + err.message;
@@ -1549,11 +1910,7 @@
         function hexToRgb(hex) {
             hex = hex.replace('#', '');
             if(hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
-            return {
-                r: parseInt(hex.substring(0,2), 16),
-                g: parseInt(hex.substring(2,4), 16),
-                b: parseInt(hex.substring(4,6), 16)
-            };
+            return { r: parseInt(hex.substring(0,2), 16), g: parseInt(hex.substring(2,4), 16), b: parseInt(hex.substring(4,6), 16) };
         }
 
         init();
