@@ -9,10 +9,11 @@
 
         :root {
             --bg-main: #050505;
-            --bg-sidebar: #0a0a0a;
+            --bg-sidebar: #0c0c0c;
+            --bg-input: #161616;
             --text-main: #e0e0e0;
             --text-muted: #555;
-            --border: #1a1a1a;
+            --border: #222;
             --accent: #4a90e2;
             --danger: #d93025;
         }
@@ -23,7 +24,6 @@
             height: 100%;
             background-color: var(--bg-main);
             display: flex;
-            justify-content: center;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
             -webkit-font-smoothing: antialiased;
             color: var(--text-main);
@@ -37,9 +37,9 @@
         }
 
         .sidebar {
-            width: 280px;
+            width: 380px;
             background-color: var(--bg-sidebar);
-            padding: 30px 20px;
+            padding: 40px 30px;
             box-sizing: border-box;
             overflow-y: auto;
             display: flex;
@@ -55,11 +55,11 @@
         .sidebar h2 {
             margin-top: 0;
             color: #fff;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin-bottom: 30px;
+            letter-spacing: 2px;
+            margin-bottom: 40px;
         }
 
         .center-preview {
@@ -73,33 +73,35 @@
         /* --- Clean UI Elements --- */
         
         .segment-item {
-            padding: 15px 0;
+            padding: 20px 0;
             border-bottom: 1px solid var(--border);
             position: relative;
         }
 
         .segment-text {
-            font-size: 13px;
+            font-size: 14px;
             color: #ccc;
-            margin: 0 0 5px 0;
-            line-height: 1.4;
+            margin: 0 0 8px 0;
+            line-height: 1.5;
+            padding-right: 20px;
         }
 
         .segment-meta {
             font-size: 11px;
             color: var(--text-muted);
             margin: 0;
+            font-family: monospace;
         }
 
         .btn-delete {
             position: absolute;
             right: 0;
-            top: 15px;
+            top: 20px;
             background: none;
             border: none;
             color: var(--text-muted);
             cursor: pointer;
-            font-size: 12px;
+            font-size: 14px;
             padding: 4px;
             transition: color 0.2s;
         }
@@ -107,26 +109,26 @@
 
         .add-section {
             margin-top: auto;
-            padding-top: 20px;
-            border-top: 1px solid var(--border);
+            padding-top: 30px;
         }
 
         label {
             display: block;
             font-size: 11px;
             color: var(--text-muted);
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            font-weight: 500;
         }
 
         input[type="text"], input[type="number"], textarea {
             width: 100%;
-            background: transparent;
+            background: var(--bg-input);
             color: #fff;
-            border: none;
-            border-bottom: 1px solid var(--border);
-            padding: 8px 0;
+            border: 1px solid var(--border);
+            padding: 12px;
+            border-radius: 6px;
             box-sizing: border-box;
             margin-bottom: 20px;
             font-family: inherit;
@@ -136,12 +138,13 @@
         }
 
         input:focus, textarea:focus {
-            border-bottom-color: var(--accent);
+            border-color: #333;
         }
 
         textarea {
-            resize: none;
-            min-height: 60px;
+            resize: vertical;
+            min-height: 80px;
+            line-height: 1.5;
         }
 
         button {
@@ -150,8 +153,8 @@
             color: #000;
             font-weight: 600;
             border: none;
-            padding: 10px;
-            border-radius: 4px;
+            padding: 12px;
+            border-radius: 6px;
             width: 100%;
             transition: opacity 0.2s;
             font-size: 13px;
@@ -164,10 +167,11 @@
             color: #fff;
             border: 1px solid var(--border);
             margin-bottom: 30px;
-            font-size: 12px;
-            letter-spacing: 1px;
+            font-size: 11px;
+            letter-spacing: 1.5px;
+            padding: 14px;
         }
-        button.play-btn:hover { border-color: #444; }
+        button.play-btn:hover { border-color: #444; background: var(--bg-input); }
 
         button.btn-ghost {
             background: transparent;
@@ -183,31 +187,26 @@
             font-size: 11px;
             color: var(--accent);
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 5px;
+            letter-spacing: 1.5px;
+            margin-bottom: 8px;
             display: block;
+            font-weight: 500;
         }
 
         .context-title {
-            font-size: 20px;
+            font-size: 24px;
             font-weight: 500;
-            margin: 0 0 15px 0;
+            margin: 0 0 25px 0;
             color: #fff;
         }
 
-        .context-preview {
-            font-size: 13px;
-            color: #888;
-            font-style: italic;
+        .prop-group {
             margin-bottom: 30px;
-            line-height: 1.5;
-            border-left: 2px solid var(--border);
-            padding-left: 12px;
         }
 
         .prop-row {
             display: flex;
-            gap: 20px;
+            gap: 15px;
             margin-bottom: 20px;
         }
         .prop-row > div { flex: 1; }
@@ -216,14 +215,14 @@
             -webkit-appearance: none;
             border: 1px solid var(--border);
             width: 100%;
-            height: 36px;
-            padding: 2px;
-            background: transparent;
+            height: 44px;
+            padding: 3px;
+            background: var(--bg-input);
             cursor: pointer;
-            border-radius: 4px;
+            border-radius: 6px;
         }
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
-        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 2px; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
 
         /* --- Mobile Screen (Unchanged CORE) --- */
         .mobile-screen {
@@ -251,7 +250,6 @@
             height: 10.15em; 
             overflow: hidden;
             position: relative;
-            cursor: grab;
             
             -webkit-mask-image: linear-gradient(to bottom, 
                 rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 15%, rgba(0,0,0,1) 40%, 
@@ -261,21 +259,19 @@
                 rgba(0,0,0,1) 60%, rgba(0,0,0,0.25) 85%, rgba(0,0,0,0) 100%);
         }
 
-        .caption-scroll-container:active { cursor: grabbing; }
-
         .caption-track {
             position: relative;
             transition: transform 0.6s cubic-bezier(0.25, 1, 0.3, 1);
             will-change: transform;
             text-align: left;
-            user-select: text; /* Allow selection for the new feature */
+            user-select: text;
         }
 
         .word {
             font-weight: 500;
             color: #a6a6a6;
             transition: color 0.3s ease, text-shadow 0.3s ease;
-            display: inline-block; /* Helps with selection bounding */
+            display: inline;
         }
 
         .word.active-word {
@@ -283,10 +279,11 @@
             text-shadow: 0 0 1px rgba(255, 255, 255, 0.5);
         }
 
-        /* Selection highlight style inside the caption */
+        /* Premium subtle selection style */
         ::selection {
-            background: rgba(74, 144, 226, 0.3);
-            color: #fff;
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            text-shadow: 0 0 2px rgba(255, 255, 255, 0.3);
         }
     </style>
 </head>
@@ -325,7 +322,7 @@
 
         <!-- RIGHT SIDEBAR -->
         <div class="sidebar right-sidebar">
-            <h2>Properties</h2>
+            <h2>Inspector</h2>
             <div id="inspector-content">
                 <!-- Contextual properties loaded here -->
             </div>
@@ -355,9 +352,9 @@
         let lineTimer = null;
         let isPlaying = true;
         
-        // Selection state
+        // Selection & override state
         let currentSelectionWordIds = [];
-        let wordOverrides = {}; // { wordId: '#color' }
+        let wordOverrides = {}; 
 
         async function init() {
             try {
@@ -374,10 +371,11 @@
             renderLeftSidebar();
             renderSegmentsToDOM();
             
+            // Allow DOM to layout the text naturally
             setTimeout(() => {
                 calculateLines();
                 initializeLineSettings();
-                updateInspector(); // Replaces renderRightSidebar
+                updateInspector(); 
                 
                 if (isPlaying) {
                     if (lineTimer) clearTimeout(lineTimer);
@@ -385,7 +383,7 @@
                 } else {
                     highlightLine(currentLineIndex);
                 }
-            }, 100);
+            }, 50);
         }
 
         // --- Core Engine ---
@@ -395,15 +393,18 @@
             track.innerHTML = '';
             let globalWordIndex = 0;
             
-            segments.forEach((seg) => {
+            segments.forEach((seg, segIndex) => {
                 const words = seg.text.split(' ');
                 const timePerWord = parseFloat(seg.duration) / words.length;
-                words.forEach((word) => {
+                
+                words.forEach((word, wordIndex) => {
                     if(word.trim() === '') return;
+                    
                     const span = document.createElement('span');
                     span.className = 'word';
-                    span.innerText = word + ' '; 
+                    span.textContent = word;
                     span.dataset.baseDuration = timePerWord;
+                    span.dataset.segIndex = segIndex;
                     span.dataset.wordId = globalWordIndex; 
                     
                     // Re-apply overrides if they exist
@@ -412,6 +413,10 @@
                     }
                     
                     track.appendChild(span);
+                    
+                    // Append a space natively to fix spacing issues
+                    track.appendChild(document.createTextNode(' '));
+                    
                     globalWordIndex++;
                 });
             });
@@ -459,7 +464,7 @@
             if (currentLineIndex >= visualLines.length) currentLineIndex = 0;
             
             highlightLine(currentLineIndex);
-            updateInspector(); // Update right sidebar as lines change
+            updateInspector(); 
             
             let durationMs = parseFloat(lineSettings[currentLineIndex].duration) * 1000;
             
@@ -485,7 +490,6 @@
             // Apply styles
             activeLineSpans.forEach(span => {
                 span.classList.add('active-word');
-                // Check for word-level override first, then line color, then default white
                 const color = span.dataset.overrideColor || settings?.color || '#ffffff';
                 span.style.color = color;
                 span.style.textShadow = `0 0 1px ${color}`;
@@ -527,38 +531,16 @@
 
         function setupScrubbing() {
             const container = document.getElementById('scroll-container');
-            
+            // Only mouse wheel is allowed now
             container.addEventListener('wheel', (e) => {
                 if (isPlaying) return;
                 e.preventDefault();
                 if (e.deltaY > 0) scrubToLine(1);
                 else scrubToLine(-1);
             });
-
-            let startY = 0;
-            container.addEventListener('mousedown', (e) => {
-                if (isPlaying) return;
-                startY = e.clientY;
-                document.addEventListener('mousemove', onMouseMove);
-                document.addEventListener('mouseup', onMouseUp);
-            });
-
-            function onMouseMove(e) {
-                const deltaY = startY - e.clientY;
-                if (Math.abs(deltaY) > 25) {
-                    if (deltaY > 0) scrubToLine(1);
-                    else scrubToLine(-1);
-                    startY = e.clientY;
-                }
-            }
-
-            function onMouseUp() {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
-            }
         }
 
-        // --- Text Selection Logic (Right Sidebar Context) ---
+        // --- Text Selection Logic ---
 
         function setupSelectionListener() {
             document.addEventListener('selectionchange', () => {
@@ -566,7 +548,6 @@
                 const track = document.getElementById('caption-track');
                 
                 if (!selection.rangeCount || !track.contains(selection.anchorNode)) {
-                    // Clicked outside track, or cleared selection
                     if (currentSelectionWordIds.length > 0) {
                         currentSelectionWordIds = [];
                         updateInspector();
@@ -583,11 +564,10 @@
                     }
                 });
 
-                if (selectedIds.length > 0) {
+                // Only update UI if selection actually changed to prevent jumps
+                const selectionChanged = JSON.stringify(selectedIds) !== JSON.stringify(currentSelectionWordIds);
+                if (selectionChanged) {
                     currentSelectionWordIds = selectedIds;
-                    updateInspector();
-                } else if (currentSelectionWordIds.length > 0) {
-                    currentSelectionWordIds = [];
                     updateInspector();
                 }
             });
@@ -610,31 +590,54 @@
             const lineIdx = currentLineIndex;
             if (!lineSettings[lineIdx]) return;
 
-            const textPreview = visualLines[lineIdx]?.map(s => s.innerText).join('').trim() || '';
-            
+            const activeLine = visualLines[lineIdx];
+            if (!activeLine || activeLine.length === 0) return;
+
+            const segIndex = activeLine[0].dataset.segIndex;
+            const segText = segments[segIndex].text;
+
             container.innerHTML = `
                 <span class="context-label">Active Line</span>
                 <h3 class="context-title">Line ${lineIdx + 1}</h3>
-                <div class="context-preview">"${textPreview}"</div>
                 
+                <div class="prop-group">
+                    <label>Text Content <span style="opacity:0.4; font-weight:400;">(Segment ${parseInt(segIndex)+1})</span></label>
+                    <textarea id="line-text-editor" rows="4">${segText}</textarea>
+                </div>
+
                 <div class="prop-row">
                     <div>
                         <label>Duration (s)</label>
-                        <input type="number" step="0.1" value="${lineSettings[lineIdx].duration}" onchange="updateLineDuration(${lineIdx}, this.value)">
+                        <input type="number" step="0.1" value="${lineSettings[lineIdx].duration}" id="line-duration-input">
                     </div>
                     <div>
                         <label>Color</label>
-                        <input type="color" value="${lineSettings[lineIdx].color}" onchange="updateLineColor(${lineIdx}, this.value)">
+                        <input type="color" value="${lineSettings[lineIdx].color}" id="line-color-input">
                     </div>
                 </div>
                 <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px; line-height: 1.4;">
-                    Select specific words on the screen to override their individual color.
+                    Highlight specific words on the screen to override their individual color.
                 </p>
             `;
+
+            // Event Listeners for the Line Editor
+            const textEditor = document.getElementById('line-text-editor');
+            textEditor.addEventListener('focus', () => {
+                if (isPlaying) togglePlayback(); // Pause so cursor doesn't jump
+            });
+            textEditor.addEventListener('input', (e) => {
+                updateSegmentText(segIndex, e.target.value);
+            });
+
+            document.getElementById('line-duration-input').addEventListener('change', (e) => {
+                updateLineDuration(lineIdx, e.target.value);
+            });
+            document.getElementById('line-color-input').addEventListener('input', (e) => {
+                updateLineColor(lineIdx, e.target.value);
+            });
         }
 
         function renderSelectionInspector(container) {
-            // Determine the current color of the selection (use the first word's color)
             const firstSpan = document.querySelector(`[data-word-id="${currentSelectionWordIds[0]}"]`);
             const firstWordColor = firstSpan?.dataset.overrideColor || lineSettings[currentLineIndex]?.color || '#ffffff';
 
@@ -644,15 +647,31 @@
                 <div class="prop-row">
                     <div>
                         <label>Color Override</label>
-                        <input type="color" value="${firstWordColor}" onchange="updateSelectionColor(this.value)">
+                        <input type="color" value="${firstWordColor}" id="selection-color-input">
                     </div>
                 </div>
                 <button class="btn-ghost" onclick="clearSelectionOverrides()">Reset to Line Color</button>
                 <button class="btn-ghost" onclick="deselectAll()">Deselect</button>
             `;
+
+            document.getElementById('selection-color-input').addEventListener('input', (e) => {
+                updateSelectionColor(e.target.value);
+            });
         }
 
         // --- Update Methods ---
+
+        function updateSegmentText(segIndex, newText) {
+            segments[segIndex].text = newText;
+            renderSegmentsToDOM(); // Re-render the track text
+            
+            // Wait a frame for the DOM to update and text to wrap naturally
+            requestAnimationFrame(() => {
+                calculateLines();
+                initializeLineSettings();
+                highlightLine(currentLineIndex); 
+            });
+        }
 
         function updateLineDuration(index, val) {
             lineSettings[index].duration = parseFloat(val) || 1.0;
@@ -672,7 +691,7 @@
                 const span = track.querySelector(`[data-word-id="${id}"]`);
                 if (span) span.dataset.overrideColor = color;
             });
-            highlightLine(currentLineIndex); // Re-render colors
+            highlightLine(currentLineIndex); 
         }
 
         function clearSelectionOverrides() {
@@ -726,7 +745,7 @@
         function removeSegment(index) {
             segments.splice(index, 1);
             lineSettings = {};
-            wordOverrides = {}; // Clear overrides when structure changes
+            wordOverrides = {}; 
             currentLineIndex = 0;
             refreshAll();
         }
