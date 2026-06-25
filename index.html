@@ -5,22 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TikTok Style Captions Editor</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+        :root {
+            --bg-main: #050505;
+            --bg-sidebar: #0a0a0a;
+            --text-main: #e0e0e0;
+            --text-muted: #555;
+            --border: #1a1a1a;
+            --accent: #4a90e2;
+            --danger: #d93025;
+        }
 
         body, html {
             margin: 0;
             padding: 0;
             height: 100%;
-            background-color: #111;
+            background-color: var(--bg-main);
             display: flex;
             justify-content: center;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
             -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+            color: var(--text-main);
             overflow: hidden;
         }
 
-        /* --- Editor Layout --- */
         .editor-container {
             display: flex;
             width: 100%;
@@ -28,24 +37,29 @@
         }
 
         .sidebar {
-            width: 320px;
-            background-color: #1a1a1a;
-            color: #e0e0e0;
-            padding: 20px;
+            width: 280px;
+            background-color: var(--bg-sidebar);
+            padding: 30px 20px;
             box-sizing: border-box;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            border-left: 1px solid #333;
-            border-right: 1px solid #333;
+            border-right: 1px solid var(--border);
+        }
+
+        .sidebar.right-sidebar {
+            border-right: none;
+            border-left: 1px solid var(--border);
         }
 
         .sidebar h2 {
             margin-top: 0;
             color: #fff;
-            font-size: 18px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 30px;
         }
 
         .center-preview {
@@ -53,88 +67,165 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: #111;
+            background-color: var(--bg-main);
         }
 
-        /* --- UI Elements --- */
-        .card {
-            background: #252525;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
+        /* --- Clean UI Elements --- */
+        
+        .segment-item {
+            padding: 15px 0;
+            border-bottom: 1px solid var(--border);
+            position: relative;
         }
 
-        .card h4 {
-            margin: 0 0 10px 0;
-            color: #fff;
-            font-size: 14px;
+        .segment-text {
+            font-size: 13px;
+            color: #ccc;
+            margin: 0 0 5px 0;
+            line-height: 1.4;
+        }
+
+        .segment-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        .btn-delete {
+            position: absolute;
+            right: 0;
+            top: 15px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 12px;
+            padding: 4px;
+            transition: color 0.2s;
+        }
+        .btn-delete:hover { color: var(--danger); }
+
+        .add-section {
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
         }
 
         label {
             display: block;
-            font-size: 12px;
-            color: #aaa;
-            margin-bottom: 5px;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         input[type="text"], input[type="number"], textarea {
             width: 100%;
-            background: #111;
+            background: transparent;
             color: #fff;
-            border: 1px solid #444;
-            padding: 8px;
-            border-radius: 4px;
+            border: none;
+            border-bottom: 1px solid var(--border);
+            padding: 8px 0;
             box-sizing: border-box;
-            margin-bottom: 10px;
+            margin-bottom: 20px;
             font-family: inherit;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, textarea:focus {
+            border-bottom-color: var(--accent);
         }
 
         textarea {
-            resize: vertical;
+            resize: none;
             min-height: 60px;
-        }
-
-        .row {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .row input {
-            flex: 1;
         }
 
         button {
             cursor: pointer;
-            background: #3a86ff;
-            color: #fff;
+            background: #fff;
+            color: #000;
             font-weight: 600;
             border: none;
             padding: 10px;
-            border-radius: 6px;
+            border-radius: 4px;
             width: 100%;
-            transition: background 0.2s;
+            transition: opacity 0.2s;
+            font-size: 13px;
         }
 
-        button:hover { background: #2a76ef; }
-        button.danger { background: #ff0033; }
-        button.danger:hover { background: #e0002b; }
+        button:hover { opacity: 0.85; }
+        
         button.play-btn {
-            background: #00d084;
-            font-size: 16px;
+            background: transparent;
+            color: #fff;
+            border: 1px solid var(--border);
+            margin-bottom: 30px;
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+        button.play-btn:hover { border-color: #444; }
+
+        button.btn-ghost {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            font-weight: 500;
+            margin-top: 10px;
+        }
+        button.btn-ghost:hover { border-color: #444; color: #fff; }
+
+        /* Right sidebar specifics */
+        .context-label {
+            font-size: 11px;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .context-title {
+            font-size: 20px;
+            font-weight: 500;
+            margin: 0 0 15px 0;
+            color: #fff;
+        }
+
+        .context-preview {
+            font-size: 13px;
+            color: #888;
+            font-style: italic;
+            margin-bottom: 30px;
+            line-height: 1.5;
+            border-left: 2px solid var(--border);
+            padding-left: 12px;
+        }
+
+        .prop-row {
+            display: flex;
+            gap: 20px;
             margin-bottom: 20px;
         }
-        button.play-btn:hover { background: #00b070; }
+        .prop-row > div { flex: 1; }
 
-        .line-text-preview {
-            font-size: 12px;
-            color: #ccc;
-            margin-bottom: 10px;
-            font-style: italic;
-            border-left: 2px solid #555;
-            padding-left: 8px;
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: 1px solid var(--border);
+            width: 100%;
+            height: 36px;
+            padding: 2px;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 4px;
         }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 2px; }
 
-        /* --- Mobile Screen (Unchanged Core) --- */
+        /* --- Mobile Screen (Unchanged CORE) --- */
         .mobile-screen {
             width: 100%;
             max-width: 521px;
@@ -144,7 +235,6 @@
             display: flex;
             align-items: center;
             position: relative;
-            box-shadow: 0 0 50px rgba(0,0,0,0.5);
         }
 
         .caption-wrapper {
@@ -164,70 +254,63 @@
             cursor: grab;
             
             -webkit-mask-image: linear-gradient(to bottom, 
-                rgba(0,0,0,0) 0%, 
-                rgba(0,0,0,0.25) 15%, 
-                rgba(0,0,0,1) 40%, 
-                rgba(0,0,0,1) 60%, 
-                rgba(0,0,0,0.25) 85%, 
-                rgba(0,0,0,0) 100%
-            );
+                rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 15%, rgba(0,0,0,1) 40%, 
+                rgba(0,0,0,1) 60%, rgba(0,0,0,0.25) 85%, rgba(0,0,0,0) 100%);
             mask-image: linear-gradient(to bottom, 
-                rgba(0,0,0,0) 0%, 
-                rgba(0,0,0,0.25) 15%, 
-                rgba(0,0,0,1) 40%, 
-                rgba(0,0,0,1) 60%, 
-                rgba(0,0,0,0.25) 85%, 
-                rgba(0,0,0,0) 100%
-            );
+                rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 15%, rgba(0,0,0,1) 40%, 
+                rgba(0,0,0,1) 60%, rgba(0,0,0,0.25) 85%, rgba(0,0,0,0) 100%);
         }
 
-        .caption-scroll-container:active {
-            cursor: grabbing;
-        }
+        .caption-scroll-container:active { cursor: grabbing; }
 
         .caption-track {
             position: relative;
             transition: transform 0.6s cubic-bezier(0.25, 1, 0.3, 1);
             will-change: transform;
             text-align: left;
+            user-select: text; /* Allow selection for the new feature */
         }
 
         .word {
             font-weight: 500;
             color: #a6a6a6;
             transition: color 0.3s ease, text-shadow 0.3s ease;
+            display: inline-block; /* Helps with selection bounding */
         }
 
         .word.active-word {
             color: #ffffff;
             text-shadow: 0 0 1px rgba(255, 255, 255, 0.5);
         }
+
+        /* Selection highlight style inside the caption */
+        ::selection {
+            background: rgba(74, 144, 226, 0.3);
+            color: #fff;
+        }
     </style>
 </head>
 <body>
     <div class="editor-container">
         
-        <!-- LEFT SIDEBAR: Global Management -->
-        <div class="sidebar" id="left-sidebar">
-            <h2>Playback & Texts</h2>
-            <button class="play-btn" id="play-pause-btn" onclick="togglePlayback()">Pause Animation</button>
-            <p style="font-size: 12px; color: #888; margin-top: 0;">Scroll or drag the text on the screen when paused to seek.</p>
+        <!-- LEFT SIDEBAR -->
+        <div class="sidebar">
+            <h2>Segments</h2>
+            <button class="play-btn" id="play-pause-btn" onclick="togglePlayback()">Pause</button>
             
             <div id="segments-list">
                 <!-- Segments rendered here -->
             </div>
 
-            <div class="card" style="background: #1e1e1e; border: 1px dashed #444;">
-                <h4>Add New Text</h4>
-                <label>Text Content</label>
-                <textarea id="new-text-input" placeholder="Type new text here..."></textarea>
-                <label>Total Duration (seconds)</label>
-                <input type="number" id="new-duration-input" step="0.5" value="5.0">
+            <div class="add-section">
+                <label>Add New Text</label>
+                <textarea id="new-text-input" placeholder="Type new text here..." rows="3"></textarea>
+                <input type="number" id="new-duration-input" step="0.5" value="5.0" placeholder="Duration (s)">
                 <button onclick="addSegment()">Add Segment</button>
             </div>
         </div>
 
-        <!-- CENTER: Mobile Screen -->
+        <!-- CENTER PREVIEW -->
         <div class="center-preview">
             <div class="mobile-screen">
                 <div class="caption-wrapper">
@@ -240,12 +323,11 @@
             </div>
         </div>
 
-        <!-- RIGHT SIDEBAR: Line Editor -->
-        <div class="sidebar" id="right-sidebar">
-            <h2>Line Customization</h2>
-            <p style="font-size: 12px; color: #888; margin-top: 0;">Edit specific colors and timings for each physical line below.</p>
-            <div id="lines-editor-list">
-                <!-- Line configs rendered here -->
+        <!-- RIGHT SIDEBAR -->
+        <div class="sidebar right-sidebar">
+            <h2>Properties</h2>
+            <div id="inspector-content">
+                <!-- Contextual properties loaded here -->
             </div>
         </div>
 
@@ -254,43 +336,48 @@
     <script>
         let segments = [
             {
-                "text": "Dynamic text highlighting creates a reading rhythm that matches the user's natural reading pace, reducing cognitive load.",
-                "duration": 6.0
+                "text": "Dynamic text highlighting creates a reading rhythm that matches the user's natural reading pace, reducing cognitive load and helping them to maintain focus and flow.",
+                "duration": 8.0
             },
             {
                 "text": "Standard interfaces often present overwhelming walls of text, but guiding the eye ensures the viewer never loses their place.",
                 "duration": 6.0
+            },
+            {
+                "text": "By timing each segment precisely, we create a distraction-free experience optimized for mobile screens.",
+                "duration": 5.0
             }
         ];
 
         let currentLineIndex = 0;
         let visualLines = [];
-        let lineSettings = {}; // Keyed by line index. Example: { 0: { color: '#ffffff', duration: 2.0 } }
+        let lineSettings = {}; 
         let lineTimer = null;
         let isPlaying = true;
+        
+        // Selection state
+        let currentSelectionWordIds = [];
+        let wordOverrides = {}; // { wordId: '#color' }
 
         async function init() {
-            // Try load local data if any, else use defaults
             try {
                 const res = await fetch('captions.json');
                 if (res.ok) segments = await res.json();
             } catch (e) { }
 
             refreshAll();
-
-            // Drag and Scroll seeking events
             setupScrubbing();
+            setupSelectionListener();
         }
 
         function refreshAll() {
             renderLeftSidebar();
             renderSegmentsToDOM();
             
-            // Allow DOM to layout the text naturally
             setTimeout(() => {
                 calculateLines();
                 initializeLineSettings();
-                renderRightSidebar();
+                updateInspector(); // Replaces renderRightSidebar
                 
                 if (isPlaying) {
                     if (lineTimer) clearTimeout(lineTimer);
@@ -306,6 +393,8 @@
         function renderSegmentsToDOM() {
             const track = document.getElementById('caption-track');
             track.innerHTML = '';
+            let globalWordIndex = 0;
+            
             segments.forEach((seg) => {
                 const words = seg.text.split(' ');
                 const timePerWord = parseFloat(seg.duration) / words.length;
@@ -314,8 +403,16 @@
                     const span = document.createElement('span');
                     span.className = 'word';
                     span.innerText = word + ' '; 
-                    span.dataset.baseDuration = timePerWord; 
+                    span.dataset.baseDuration = timePerWord;
+                    span.dataset.wordId = globalWordIndex; 
+                    
+                    // Re-apply overrides if they exist
+                    if (wordOverrides[globalWordIndex]) {
+                        span.dataset.overrideColor = wordOverrides[globalWordIndex];
+                    }
+                    
                     track.appendChild(span);
+                    globalWordIndex++;
                 });
             });
         }
@@ -340,7 +437,6 @@
         }
 
         function initializeLineSettings() {
-            // Re-map line settings in case lines changed (dumb index matching for now per requirements)
             visualLines.forEach((line, index) => {
                 if (!lineSettings[index]) {
                     let baseDur = 0;
@@ -351,8 +447,6 @@
                     };
                 }
             });
-            
-            // Cleanup stale settings
             Object.keys(lineSettings).forEach(key => {
                 if (parseInt(key) >= visualLines.length) delete lineSettings[key];
             });
@@ -362,11 +456,10 @@
             if (!isPlaying) return;
             if (visualLines.length === 0) return;
             
-            if (currentLineIndex >= visualLines.length) {
-                currentLineIndex = 0; 
-            }
+            if (currentLineIndex >= visualLines.length) currentLineIndex = 0;
             
             highlightLine(currentLineIndex);
+            updateInspector(); // Update right sidebar as lines change
             
             let durationMs = parseFloat(lineSettings[currentLineIndex].duration) * 1000;
             
@@ -379,8 +472,6 @@
         function highlightLine(index) {
             if (index < 0 || index >= visualLines.length) return;
             
-            const track = document.getElementById('caption-track');
-            
             // Clear all
             document.querySelectorAll('.word').forEach(w => {
                 w.classList.remove('active-word');
@@ -391,17 +482,17 @@
             const activeLineSpans = visualLines[index];
             const settings = lineSettings[index];
             
-            // Apply custom styles
+            // Apply styles
             activeLineSpans.forEach(span => {
                 span.classList.add('active-word');
-                if (settings && settings.color !== '#ffffff') {
-                    span.style.color = settings.color;
-                    // Custom text shadow mapping
-                    span.style.textShadow = `0 0 1px ${settings.color}`;
-                }
+                // Check for word-level override first, then line color, then default white
+                const color = span.dataset.overrideColor || settings?.color || '#ffffff';
+                span.style.color = color;
+                span.style.textShadow = `0 0 1px ${color}`;
             });
             
             // Scroll to center
+            const track = document.getElementById('caption-track');
             const container = document.getElementById('scroll-container');
             const containerHeight = container.clientHeight;
             const lineTop = activeLineSpans[0].offsetTop;
@@ -409,40 +500,29 @@
             
             const translation = (containerHeight / 2) - (lineTop + lineHeight / 2);
             track.style.transform = `translateY(${translation}px)`;
-            
-            // Scroll right sidebar to show active config
-            const activeCard = document.getElementById(`line-card-${index}`);
-            if (activeCard && isPlaying) {
-                activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                // Add a subtle flash
-                activeCard.style.boxShadow = '0 0 10px #3a86ff';
-                setTimeout(() => activeCard.style.boxShadow = 'none', 500);
-            }
         }
 
-        // --- Playback Controls & Scrubbing ---
+        // --- Playback & Scrubbing ---
 
         function togglePlayback() {
             isPlaying = !isPlaying;
             const btn = document.getElementById('play-pause-btn');
             if (isPlaying) {
-                btn.innerText = "Pause Animation";
-                btn.style.background = "#00d084";
+                btn.innerText = "Pause";
                 playLoop();
             } else {
-                btn.innerText = "Play Animation";
-                btn.style.background = "#ff9800";
+                btn.innerText = "Play";
                 if (lineTimer) clearTimeout(lineTimer);
             }
         }
 
         function scrubToLine(offset) {
-            if (isPlaying) return;
             let newIndex = currentLineIndex + offset;
             if (newIndex < 0) newIndex = 0;
             if (newIndex >= visualLines.length) newIndex = visualLines.length - 1;
             currentLineIndex = newIndex;
             highlightLine(currentLineIndex);
+            updateInspector();
         }
 
         function setupScrubbing() {
@@ -465,7 +545,7 @@
 
             function onMouseMove(e) {
                 const deltaY = startY - e.clientY;
-                if (Math.abs(deltaY) > 25) { // Swipe threshold
+                if (Math.abs(deltaY) > 25) {
                     if (deltaY > 0) scrubToLine(1);
                     else scrubToLine(-1);
                     startY = e.clientY;
@@ -478,21 +558,154 @@
             }
         }
 
+        // --- Text Selection Logic (Right Sidebar Context) ---
+
+        function setupSelectionListener() {
+            document.addEventListener('selectionchange', () => {
+                const selection = window.getSelection();
+                const track = document.getElementById('caption-track');
+                
+                if (!selection.rangeCount || !track.contains(selection.anchorNode)) {
+                    // Clicked outside track, or cleared selection
+                    if (currentSelectionWordIds.length > 0) {
+                        currentSelectionWordIds = [];
+                        updateInspector();
+                    }
+                    return;
+                }
+
+                const wordSpans = track.querySelectorAll('.word');
+                const selectedIds = [];
+                
+                wordSpans.forEach(span => {
+                    if (selection.containsNode(span, true)) {
+                        selectedIds.push(span.dataset.wordId);
+                    }
+                });
+
+                if (selectedIds.length > 0) {
+                    currentSelectionWordIds = selectedIds;
+                    updateInspector();
+                } else if (currentSelectionWordIds.length > 0) {
+                    currentSelectionWordIds = [];
+                    updateInspector();
+                }
+            });
+        }
+
+        // --- Right Sidebar (Inspector) Rendering ---
+
+        function updateInspector() {
+            const container = document.getElementById('inspector-content');
+            container.innerHTML = '';
+
+            if (currentSelectionWordIds.length > 0) {
+                renderSelectionInspector(container);
+            } else {
+                renderLineInspector(container);
+            }
+        }
+
+        function renderLineInspector(container) {
+            const lineIdx = currentLineIndex;
+            if (!lineSettings[lineIdx]) return;
+
+            const textPreview = visualLines[lineIdx]?.map(s => s.innerText).join('').trim() || '';
+            
+            container.innerHTML = `
+                <span class="context-label">Active Line</span>
+                <h3 class="context-title">Line ${lineIdx + 1}</h3>
+                <div class="context-preview">"${textPreview}"</div>
+                
+                <div class="prop-row">
+                    <div>
+                        <label>Duration (s)</label>
+                        <input type="number" step="0.1" value="${lineSettings[lineIdx].duration}" onchange="updateLineDuration(${lineIdx}, this.value)">
+                    </div>
+                    <div>
+                        <label>Color</label>
+                        <input type="color" value="${lineSettings[lineIdx].color}" onchange="updateLineColor(${lineIdx}, this.value)">
+                    </div>
+                </div>
+                <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px; line-height: 1.4;">
+                    Select specific words on the screen to override their individual color.
+                </p>
+            `;
+        }
+
+        function renderSelectionInspector(container) {
+            // Determine the current color of the selection (use the first word's color)
+            const firstSpan = document.querySelector(`[data-word-id="${currentSelectionWordIds[0]}"]`);
+            const firstWordColor = firstSpan?.dataset.overrideColor || lineSettings[currentLineIndex]?.color || '#ffffff';
+
+            container.innerHTML = `
+                <span class="context-label">Selection</span>
+                <h3 class="context-title">${currentSelectionWordIds.length} Words</h3>
+                <div class="prop-row">
+                    <div>
+                        <label>Color Override</label>
+                        <input type="color" value="${firstWordColor}" onchange="updateSelectionColor(this.value)">
+                    </div>
+                </div>
+                <button class="btn-ghost" onclick="clearSelectionOverrides()">Reset to Line Color</button>
+                <button class="btn-ghost" onclick="deselectAll()">Deselect</button>
+            `;
+        }
+
+        // --- Update Methods ---
+
+        function updateLineDuration(index, val) {
+            lineSettings[index].duration = parseFloat(val) || 1.0;
+        }
+
+        function updateLineColor(index, val) {
+            lineSettings[index].color = val;
+            if (!isPlaying && currentLineIndex === index) {
+                highlightLine(index); 
+            }
+        }
+
+        function updateSelectionColor(color) {
+            const track = document.getElementById('caption-track');
+            currentSelectionWordIds.forEach(id => {
+                wordOverrides[id] = color;
+                const span = track.querySelector(`[data-word-id="${id}"]`);
+                if (span) span.dataset.overrideColor = color;
+            });
+            highlightLine(currentLineIndex); // Re-render colors
+        }
+
+        function clearSelectionOverrides() {
+            const track = document.getElementById('caption-track');
+            currentSelectionWordIds.forEach(id => {
+                delete wordOverrides[id];
+                const span = track.querySelector(`[data-word-id="${id}"]`);
+                if (span) delete span.dataset.overrideColor;
+            });
+            highlightLine(currentLineIndex);
+            updateInspector();
+        }
+
+        function deselectAll() {
+            window.getSelection().removeAllRanges();
+            currentSelectionWordIds = [];
+            updateInspector();
+        }
+
         // --- Left Sidebar Logic ---
 
         function renderLeftSidebar() {
             const list = document.getElementById('segments-list');
             list.innerHTML = '';
             segments.forEach((seg, i) => {
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.innerHTML = `
-                    <label>Segment ${i+1}</label>
-                    <p style="font-size: 13px; color: #ccc; margin: 5px 0;">"${seg.text}"</p>
-                    <p style="font-size: 12px; color: #888; margin: 0 0 10px 0;">Base Duration: ${seg.duration}s</p>
-                    <button class="danger" onclick="removeSegment(${i})">Remove</button>
+                const item = document.createElement('div');
+                item.className = 'segment-item';
+                item.innerHTML = `
+                    <p class="segment-text">"${seg.text}"</p>
+                    <p class="segment-meta">Duration: ${seg.duration}s</p>
+                    <button class="btn-delete" onclick="removeSegment(${i})">✕</button>
                 `;
-                list.appendChild(card);
+                list.appendChild(item);
             });
         }
 
@@ -512,64 +725,17 @@
 
         function removeSegment(index) {
             segments.splice(index, 1);
-            // Reset state entirely since line indices will be horribly shifted
             lineSettings = {};
+            wordOverrides = {}; // Clear overrides when structure changes
             currentLineIndex = 0;
             refreshAll();
         }
 
-        // --- Right Sidebar Logic ---
-
-        function renderRightSidebar() {
-            const list = document.getElementById('lines-editor-list');
-            list.innerHTML = '';
-            
-            visualLines.forEach((line, index) => {
-                const textPreview = line.map(span => span.innerText).join('').trim();
-                const settings = lineSettings[index];
-                
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.id = `line-card-${index}`;
-                card.style.transition = 'box-shadow 0.3s ease';
-                
-                card.innerHTML = `
-                    <h4>Line ${index + 1}</h4>
-                    <div class="line-text-preview">"${textPreview}"</div>
-                    
-                    <div class="row">
-                        <div>
-                            <label>Duration (s)</label>
-                            <input type="number" step="0.1" value="${settings.duration}" onchange="updateLineDuration(${index}, this.value)">
-                        </div>
-                        <div>
-                            <label>Active Color</label>
-                            <input type="color" value="${settings.color}" onchange="updateLineColor(${index}, this.value)">
-                        </div>
-                    </div>
-                `;
-                list.appendChild(card);
-            });
-        }
-
-        function updateLineDuration(index, val) {
-            lineSettings[index].duration = parseFloat(val) || 1.0;
-        }
-
-        function updateLineColor(index, val) {
-            lineSettings[index].color = val;
-            if (!isPlaying && currentLineIndex === index) {
-                highlightLine(index); // Live preview if paused on this line
-            }
-        }
-
-        // Recalculate physical lines if the screen is resized (just in case)
         window.addEventListener('resize', () => {
-            if (isPlaying) togglePlayback(); // Pause on resize to avoid chaos
+            if (isPlaying) togglePlayback();
             refreshAll();
         });
 
-        // Start
         init();
     </script>
 </body>
