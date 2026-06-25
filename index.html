@@ -211,20 +211,56 @@
         }
         .prop-row > div { flex: 1; }
 
-        input[type="color"] {
-            -webkit-appearance: none;
-            border: 1px solid var(--border);
-            width: 100%;
-            height: 44px;
-            padding: 3px;
+        /* Custom Color Picker UI */
+        .custom-color-picker {
             background: var(--bg-input);
-            cursor: pointer;
+            border: 1px solid var(--border);
+            padding: 12px;
             border-radius: 6px;
+            margin-bottom: 20px;
         }
-        input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
-        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+        .color-area {
+            width: 100%;
+            height: 140px;
+            position: relative;
+            border-radius: 4px;
+            cursor: crosshair;
+            background-image: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent);
+            margin-bottom: 15px;
+        }
+        .color-dot {
+            width: 14px;
+            height: 14px;
+            background: transparent;
+            border: 2px solid white;
+            border-radius: 50%;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 4px rgba(0,0,0,0.6);
+            pointer-events: none; 
+        }
+        #hue-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 12px;
+            border-radius: 6px;
+            background: linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+            outline: none;
+            padding: 0;
+            margin: 0;
+        }
+        #hue-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            border: 1px solid #aaa;
+            cursor: pointer;
+            box-shadow: 0 0 3px rgba(0,0,0,0.5);
+        }
 
-        /* --- Mobile Screen (Unchanged CORE) --- */
+        /* --- Mobile Screen --- */
         .mobile-screen {
             width: 100%;
             max-width: 521px;
@@ -264,40 +300,40 @@
             transition: transform 0.6s cubic-bezier(0.25, 1, 0.3, 1);
             will-change: transform;
             text-align: left;
-            user-select: text;
         }
 
         .word {
-            font-weight: 500;
-            color: #a6a6a6;
-            transition: color 0.3s ease, text-shadow 0.3s ease;
             display: inline;
         }
 
-        .word.active-word {
+        /* Shifted transitions and styling strictly to individual characters */
+        .char {
+            font-weight: 500;
+            color: #a6a6a6;
+            transition: color 0.1s ease, text-shadow 0.1s ease;
+            display: inline;
+        }
+
+        .word.active-word .char {
             color: #ffffff;
             text-shadow: 0 0 1px rgba(255, 255, 255, 0.5);
         }
 
-        /* Premium subtle selection style */
         ::selection {
-            background: rgba(255, 255, 255, 0.12);
-            color: #ffffff;
-            text-shadow: 0 0 2px rgba(255, 255, 255, 0.3);
+            background: rgb(255, 255, 255);
+            color: #000000;
         }
     </style>
 </head>
 <body>
     <div class="editor-container">
         
-        <!-- LEFT SIDEBAR -->
         <div class="sidebar">
             <h2>Segments</h2>
             <button class="play-btn" id="play-pause-btn" onclick="togglePlayback()">Pause</button>
             
             <div id="segments-list">
-                <!-- Segments rendered here -->
-            </div>
+                </div>
 
             <div class="add-section">
                 <label>Add New Text</label>
@@ -307,25 +343,21 @@
             </div>
         </div>
 
-        <!-- CENTER PREVIEW -->
         <div class="center-preview">
             <div class="mobile-screen">
                 <div class="caption-wrapper">
                     <div class="caption-scroll-container" id="scroll-container">
                         <div class="caption-track" id="caption-track">
-                            <!-- Dynamic words loaded here -->
-                        </div>
+                            </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- RIGHT SIDEBAR -->
         <div class="sidebar right-sidebar">
             <h2>Inspector</h2>
             <div id="inspector-content">
-                <!-- Contextual properties loaded here -->
-            </div>
+                </div>
         </div>
 
     </div>
@@ -352,9 +384,9 @@
         let lineTimer = null;
         let isPlaying = true;
         
-        // Selection & override state
-        let currentSelectionWordIds = [];
-        let wordOverrides = {}; 
+        // Selection & override state now target individual chars
+        let currentSelectionCharIds = [];
+        let charOverrides = {}; 
 
         async function init() {
             try {
@@ -371,7 +403,6 @@
             renderLeftSidebar();
             renderSegmentsToDOM();
             
-            // Allow DOM to layout the text naturally
             setTimeout(() => {
                 calculateLines();
                 initializeLineSettings();
@@ -391,33 +422,48 @@
         function renderSegmentsToDOM() {
             const track = document.getElementById('caption-track');
             track.innerHTML = '';
-            let globalWordIndex = 0;
+            let globalCharIndex = 0;
             
             segments.forEach((seg, segIndex) => {
                 const words = seg.text.split(' ');
                 const timePerWord = parseFloat(seg.duration) / words.length;
                 
-                words.forEach((word, wordIndex) => {
+                words.forEach((word) => {
                     if(word.trim() === '') return;
                     
-                    const span = document.createElement('span');
-                    span.className = 'word';
-                    span.textContent = word;
-                    span.dataset.baseDuration = timePerWord;
-                    span.dataset.segIndex = segIndex;
-                    span.dataset.wordId = globalWordIndex; 
+                    const wordSpan = document.createElement('span');
+                    wordSpan.className = 'word';
+                    wordSpan.dataset.baseDuration = timePerWord;
+                    wordSpan.dataset.segIndex = segIndex;
                     
-                    // Re-apply overrides if they exist
-                    if (wordOverrides[globalWordIndex]) {
-                        span.dataset.overrideColor = wordOverrides[globalWordIndex];
+                    // Split word into individually selectable characters
+                    const chars = word.split('');
+                    chars.forEach(char => {
+                        const charSpan = document.createElement('span');
+                        charSpan.className = 'char';
+                        charSpan.textContent = char;
+                        charSpan.dataset.charId = globalCharIndex;
+                        
+                        if (charOverrides[globalCharIndex]) {
+                            charSpan.dataset.overrideColor = charOverrides[globalCharIndex];
+                        }
+                        
+                        wordSpan.appendChild(charSpan);
+                        globalCharIndex++;
+                    });
+                    
+                    // Add space inside the wordSpan to maintain structure cleanly
+                    const spaceSpan = document.createElement('span');
+                    spaceSpan.className = 'char space';
+                    spaceSpan.textContent = ' ';
+                    spaceSpan.dataset.charId = globalCharIndex;
+                    if (charOverrides[globalCharIndex]) {
+                        spaceSpan.dataset.overrideColor = charOverrides[globalCharIndex];
                     }
+                    wordSpan.appendChild(spaceSpan);
+                    globalCharIndex++;
                     
-                    track.appendChild(span);
-                    
-                    // Append a space natively to fix spacing issues
-                    track.appendChild(document.createTextNode(' '));
-                    
-                    globalWordIndex++;
+                    track.appendChild(wordSpan);
                 });
             });
         }
@@ -477,22 +523,32 @@
         function highlightLine(index) {
             if (index < 0 || index >= visualLines.length) return;
             
-            // Clear all
+            // Clear all styling and strictly block selection outside the active line
             document.querySelectorAll('.word').forEach(w => {
                 w.classList.remove('active-word');
-                w.style.color = '';
-                w.style.textShadow = '';
+                w.style.pointerEvents = 'none'; 
+                w.style.userSelect = 'none';    
+                
+                w.querySelectorAll('.char').forEach(c => {
+                    c.style.color = '';
+                    c.style.textShadow = '';
+                });
             });
             
             const activeLineSpans = visualLines[index];
             const settings = lineSettings[index];
             
-            // Apply styles
-            activeLineSpans.forEach(span => {
-                span.classList.add('active-word');
-                const color = span.dataset.overrideColor || settings?.color || '#ffffff';
-                span.style.color = color;
-                span.style.textShadow = `0 0 1px ${color}`;
+            // Apply styles and enable selection only for the active line
+            activeLineSpans.forEach(wordSpan => {
+                wordSpan.classList.add('active-word');
+                wordSpan.style.pointerEvents = 'auto'; 
+                wordSpan.style.userSelect = 'text';    
+                
+                wordSpan.querySelectorAll('.char').forEach(charSpan => {
+                    const color = charSpan.dataset.overrideColor || settings?.color || '#ffffff';
+                    charSpan.style.color = color;
+                    charSpan.style.textShadow = `0 0 1px ${color}`;
+                });
             });
             
             // Scroll to center
@@ -531,7 +587,6 @@
 
         function setupScrubbing() {
             const container = document.getElementById('scroll-container');
-            // Only mouse wheel is allowed now
             container.addEventListener('wheel', (e) => {
                 if (isPlaying) return;
                 e.preventDefault();
@@ -547,39 +602,162 @@
                 const selection = window.getSelection();
                 const track = document.getElementById('caption-track');
                 
-                if (!selection.rangeCount || !track.contains(selection.anchorNode)) {
-                    if (currentSelectionWordIds.length > 0) {
-                        currentSelectionWordIds = [];
+                // Do not clear the tracked selection if clicking in the sidebar
+                if (!selection.rangeCount || !track.contains(selection.anchorNode)) return;
+
+                if (selection.isCollapsed) {
+                    if (currentSelectionCharIds.length > 0) {
+                        currentSelectionCharIds = [];
                         updateInspector();
                     }
                     return;
                 }
 
-                const wordSpans = track.querySelectorAll('.word');
+                const charSpans = track.querySelectorAll('.char');
                 const selectedIds = [];
                 
-                wordSpans.forEach(span => {
+                // Fine-grained character detection
+                charSpans.forEach(span => {
                     if (selection.containsNode(span, true)) {
-                        selectedIds.push(span.dataset.wordId);
+                        selectedIds.push(span.dataset.charId);
                     }
                 });
 
-                // Only update UI if selection actually changed to prevent jumps
-                const selectionChanged = JSON.stringify(selectedIds) !== JSON.stringify(currentSelectionWordIds);
-                if (selectionChanged) {
-                    currentSelectionWordIds = selectedIds;
+                const selectionChanged = JSON.stringify(selectedIds) !== JSON.stringify(currentSelectionCharIds);
+                if (selectionChanged && selectedIds.length > 0) {
+                    currentSelectionCharIds = selectedIds;
                     updateInspector();
                 }
             });
+        }
+
+        // --- Color Utilities ---
+        
+        function hexToHsv(hex) {
+            hex = hex.replace('#', '');
+            let r = parseInt(hex.substring(0,2), 16) / 255;
+            let g = parseInt(hex.substring(2,4), 16) / 255;
+            let b = parseInt(hex.substring(4,6), 16) / 255;
+            let max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let d = max - min;
+            let h = 0, s = (max === 0 ? 0 : d / max), v = max;
+            if (max !== min) {
+                if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+                else if (max === g) h = (b - r) / d + 2;
+                else if (max === b) h = (r - g) / d + 4;
+                h /= 6;
+            }
+            return { h: h * 360, s: s * 100, v: v * 100 };
+        }
+
+        function hsvToHex(h, s, v) {
+            s /= 100; v /= 100;
+            let c = v * s;
+            let x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            let m = v - c;
+            let r=0, g=0, b=0;
+            if (0 <= h && h < 60) { r = c; g = x; b = 0; }
+            else if (60 <= h && h < 120) { r = x; g = c; b = 0; }
+            else if (120 <= h && h < 180) { r = 0; g = c; b = x; }
+            else if (180 <= h && h < 240) { r = 0; g = x; b = c; }
+            else if (240 <= h && h < 300) { r = x; g = 0; b = c; }
+            else if (300 <= h && h <= 360) { r = c; g = 0; b = x; }
+            r = Math.round((r + m) * 255).toString(16).padStart(2, '0');
+            g = Math.round((g + m) * 255).toString(16).padStart(2, '0');
+            b = Math.round((b + m) * 255).toString(16).padStart(2, '0');
+            return `#${r}${g}${b}`;
+        }
+
+        function renderCustomColorPicker(mountId, initialHex, onChangeCallback) {
+            const container = document.getElementById(mountId);
+            let { h, s, v } = hexToHsv(initialHex || '#ffffff');
+            
+            container.innerHTML = `
+                <label>Color Override</label>
+                <div class="custom-color-picker">
+                    <div class="color-area" id="color-area-${mountId}" style="background-color: hsl(${h}, 100%, 50%);">
+                        <div class="color-dot" id="color-dot-${mountId}" style="left: ${s}%; top: ${100 - v}%;"></div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap: 15px;">
+                        <input type="range" id="hue-slider-${mountId}" min="0" max="360" value="${h}">
+                        <div id="color-preview-${mountId}" style="width:28px; height:28px; border-radius:6px; background:${initialHex}; border:1px solid var(--border); flex-shrink:0;"></div>
+                    </div>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const area = document.getElementById(`color-area-${mountId}`);
+                const dot = document.getElementById(`color-dot-${mountId}`);
+                const hueSlider = document.getElementById(`hue-slider-${mountId}`);
+                const preview = document.getElementById(`color-preview-${mountId}`);
+                let isDragging = false;
+
+                function emitColor() {
+                    const hex = hsvToHex(h, s, v);
+                    area.style.backgroundColor = `hsl(${h}, 100%, 50%)`;
+                    preview.style.backgroundColor = hex;
+                    onChangeCallback(hex);
+                }
+
+                const clearNativeSelection = () => window.getSelection().removeAllRanges();
+
+                hueSlider.addEventListener('mousedown', clearNativeSelection);
+                hueSlider.addEventListener('input', (e) => {
+                    h = parseFloat(e.target.value);
+                    emitColor();
+                });
+
+                area.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    clearNativeSelection(); // Makes live edits cleanly visible on the text
+                    updateFromMouse(e);
+                });
+
+                const onMouseMove = (e) => {
+                    if (!isDragging) return;
+                    updateFromMouse(e);
+                };
+                
+                const onMouseUp = () => { isDragging = false; };
+
+                // Fixes the UI unresponsiveness by attaching drag completely outside the element bounds
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+
+                function updateFromMouse(e) {
+                    const rect = area.getBoundingClientRect();
+                    let x = e.clientX - rect.left;
+                    let y = e.clientY - rect.top;
+                    x = Math.max(0, Math.min(x, rect.width));
+                    y = Math.max(0, Math.min(y, rect.height));
+
+                    s = (x / rect.width) * 100;
+                    v = 100 - ((y / rect.height) * 100);
+
+                    dot.style.left = `${s}%`;
+                    dot.style.top = `${100 - v}%`;
+                    emitColor();
+                }
+
+                // Append cleanup to prevent memory leaks during inspector rewrites
+                container.parentElement.cleanupPicker = () => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                };
+            }, 0);
         }
 
         // --- Right Sidebar (Inspector) Rendering ---
 
         function updateInspector() {
             const container = document.getElementById('inspector-content');
+            if (container.cleanupPicker) {
+                container.cleanupPicker();
+                container.cleanupPicker = null;
+            }
             container.innerHTML = '';
 
-            if (currentSelectionWordIds.length > 0) {
+            if (currentSelectionCharIds.length > 0) {
                 renderSelectionInspector(container);
             } else {
                 renderLineInspector(container);
@@ -610,52 +788,46 @@
                         <label>Duration (s)</label>
                         <input type="number" step="0.1" value="${lineSettings[lineIdx].duration}" id="line-duration-input">
                     </div>
-                    <div>
-                        <label>Color</label>
-                        <input type="color" value="${lineSettings[lineIdx].color}" id="line-color-input">
-                    </div>
                 </div>
+                
+                <div id="picker-mount-line"></div>
+
                 <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px; line-height: 1.4;">
                     Highlight specific words on the screen to override their individual color.
                 </p>
             `;
 
-            // Event Listeners for the Line Editor
             const textEditor = document.getElementById('line-text-editor');
             textEditor.addEventListener('focus', () => {
-                if (isPlaying) togglePlayback(); // Pause so cursor doesn't jump
+                if (isPlaying) togglePlayback(); 
             });
-            textEditor.addEventListener('input', (e) => {
-                updateSegmentText(segIndex, e.target.value);
-            });
+            textEditor.addEventListener('input', (e) => updateSegmentText(segIndex, e.target.value));
 
             document.getElementById('line-duration-input').addEventListener('change', (e) => {
                 updateLineDuration(lineIdx, e.target.value);
             });
-            document.getElementById('line-color-input').addEventListener('input', (e) => {
-                updateLineColor(lineIdx, e.target.value);
+
+            renderCustomColorPicker('picker-mount-line', lineSettings[lineIdx].color, (color) => {
+                updateLineColor(lineIdx, color);
             });
         }
 
         function renderSelectionInspector(container) {
-            const firstSpan = document.querySelector(`[data-word-id="${currentSelectionWordIds[0]}"]`);
-            const firstWordColor = firstSpan?.dataset.overrideColor || lineSettings[currentLineIndex]?.color || '#ffffff';
+            const firstSpan = document.querySelector(`[data-char-id="${currentSelectionCharIds[0]}"]`);
+            const firstCharColor = firstSpan?.dataset.overrideColor || lineSettings[currentLineIndex]?.color || '#ffffff';
 
             container.innerHTML = `
-                <span class="context-label">Selection</span>
-                <h3 class="context-title">${currentSelectionWordIds.length} Words</h3>
-                <div class="prop-row">
-                    <div>
-                        <label>Color Override</label>
-                        <input type="color" value="${firstWordColor}" id="selection-color-input">
-                    </div>
-                </div>
+                <span class="context-label">Selection Override</span>
+                <h3 class="context-title">${currentSelectionCharIds.length} Letters</h3>
+                
+                <div id="picker-mount-selection"></div>
+                
                 <button class="btn-ghost" onclick="clearSelectionOverrides()">Reset to Line Color</button>
                 <button class="btn-ghost" onclick="deselectAll()">Deselect</button>
             `;
 
-            document.getElementById('selection-color-input').addEventListener('input', (e) => {
-                updateSelectionColor(e.target.value);
+            renderCustomColorPicker('picker-mount-selection', firstCharColor, (color) => {
+                updateSelectionColor(color);
             });
         }
 
@@ -663,9 +835,8 @@
 
         function updateSegmentText(segIndex, newText) {
             segments[segIndex].text = newText;
-            renderSegmentsToDOM(); // Re-render the track text
+            renderSegmentsToDOM(); 
             
-            // Wait a frame for the DOM to update and text to wrap naturally
             requestAnimationFrame(() => {
                 calculateLines();
                 initializeLineSettings();
@@ -686,9 +857,9 @@
 
         function updateSelectionColor(color) {
             const track = document.getElementById('caption-track');
-            currentSelectionWordIds.forEach(id => {
-                wordOverrides[id] = color;
-                const span = track.querySelector(`[data-word-id="${id}"]`);
+            currentSelectionCharIds.forEach(id => {
+                charOverrides[id] = color;
+                const span = track.querySelector(`[data-char-id="${id}"]`);
                 if (span) span.dataset.overrideColor = color;
             });
             highlightLine(currentLineIndex); 
@@ -696,9 +867,9 @@
 
         function clearSelectionOverrides() {
             const track = document.getElementById('caption-track');
-            currentSelectionWordIds.forEach(id => {
-                delete wordOverrides[id];
-                const span = track.querySelector(`[data-word-id="${id}"]`);
+            currentSelectionCharIds.forEach(id => {
+                delete charOverrides[id];
+                const span = track.querySelector(`[data-char-id="${id}"]`);
                 if (span) delete span.dataset.overrideColor;
             });
             highlightLine(currentLineIndex);
@@ -707,7 +878,7 @@
 
         function deselectAll() {
             window.getSelection().removeAllRanges();
-            currentSelectionWordIds = [];
+            currentSelectionCharIds = [];
             updateInspector();
         }
 
@@ -745,7 +916,7 @@
         function removeSegment(index) {
             segments.splice(index, 1);
             lineSettings = {};
-            wordOverrides = {}; 
+            charOverrides = {}; 
             currentLineIndex = 0;
             refreshAll();
         }
