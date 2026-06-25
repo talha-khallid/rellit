@@ -394,6 +394,7 @@
             border-radius: 2px;
         }
     </style>
+    <script src="https://unpkg.com/mp4-muxer/build/mp4-muxer.js"></script>
 </head>
 <body>
     <div class="editor-container">
@@ -402,6 +403,16 @@
             <h2>Segments</h2>
             <button class="play-btn" id="play-pause-btn" onclick="togglePlayback()">Pause</button>
             
+            <div class="export-section" style="margin-bottom: 30px; padding: 20px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-input);">
+                <label style="margin-bottom: 15px; color: #fff; font-size: 13px;">Export to MP4</label>
+                <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
+                    <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">FPS:</span>
+                    <input type="number" id="export-fps" min="20" max="60" value="60" style="margin-bottom: 0; padding: 8px; width: 80px;">
+                </div>
+                <button class="primary-btn" id="export-btn" onclick="startExport()" style="background: var(--accent); color: #fff; border: none;">Export Video</button>
+                <div id="export-progress" style="font-size: 11px; color: var(--accent); margin-top: 15px; display: none; text-transform: uppercase; letter-spacing: 1px;"></div>
+            </div>
+
             <div id="segments-list">
                 </div>
 
@@ -1088,6 +1099,239 @@
             if (isPlaying) togglePlayback();
             refreshAll();
         });
+
+        async function startExport() {
+            if (isPlaying) togglePlayback();
+            
+            const fpsInput = parseInt(document.getElementById('export-fps').value);
+            const fps = isNaN(fpsInput) ? 60 : Math.max(20, Math.min(60, fpsInput));
+            const btn = document.getElementById('export-btn');
+            const progressEl = document.getElementById('export-progress');
+            
+            btn.disabled = true;
+            btn.innerText = "Exporting...";
+            btn.style.opacity = '0.5';
+            progressEl.style.display = 'block';
+            progressEl.innerText = "Preparing...";
+
+            try {
+                let totalDuration = 0;
+                for(let i=0; i<visualLines.length; i++) {
+                    totalDuration += parseFloat(lineSettings[i]?.duration || 0);
+                }
+                const totalFrames = Math.ceil(totalDuration * fps);
+                
+                const muxer = new Mp4Muxer.Muxer({
+                    target: new Mp4Muxer.ArrayBufferTarget(),
+                    video: { codec: 'avc', width: 1080, height: 1920 },
+                    fastStart: 'in-memory'
+                });
+
+                const videoEncoder = new VideoEncoder({
+                    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+                    error: e => console.error(e)
+                });
+
+                videoEncoder.configure({
+                    codec: 'avc1.640034',
+                    width: 1080,
+                    height: 1920,
+                    hardwareAcceleration: 'prefer-software',
+                    bitrate: 10_000_000,
+                    framerate: fps
+                });
+
+                const screenEl = document.querySelector('.mobile-screen');
+                const originalCssText = screenEl.style.cssText;
+                const wrapperEl = document.querySelector('.caption-wrapper');
+                const origWrapperCss = wrapperEl.style.cssText;
+                const track = document.getElementById('caption-track');
+                const scrollContainer = document.getElementById('scroll-container');
+
+                screenEl.style.cssText += '; width: 1080px !important; height: 1920px !important; max-width: 1080px !important; position: absolute; top: 0; left: 0; z-index: -1000;';
+                wrapperEl.style.cssText += '; font-size: 43.5px !important; padding-left: 54px !important; padding-right: 157px !important;';
+                track.style.transition = 'none';
+                track.style.transform = 'translateY(0px)';
+                
+                // Force layout reflow
+                screenEl.getBoundingClientRect();
+                
+                const screenRect = screenEl.getBoundingClientRect();
+                const scrollRect = scrollContainer.getBoundingClientRect();
+                const scrollBox = {
+                    x: scrollRect.left - screenRect.left,
+                    y: scrollRect.top - screenRect.top,
+                    w: scrollRect.width,
+                    h: scrollRect.height
+                };
+
+                const wordToLineIdx = new Map();
+                visualLines.forEach((lineSpans, lineIdx) => {
+                    lineSpans.forEach(wordSpan => wordToLineIdx.set(wordSpan, lineIdx));
+                });
+
+                const charsData = Array.from(document.querySelectorAll('.char')).map(c => {
+                    const rect = c.getBoundingClientRect();
+                    const wordSpan = c.closest('.word');
+                    return {
+                        text: c.textContent,
+                        baseX: rect.left - screenRect.left,
+                        baseY: rect.top - screenRect.top,
+                        lineIdx: wordToLineIdx.get(wordSpan),
+                        overrideColor: c.dataset.overrideColor
+                    };
+                });
+
+                const offscreenCanvas = document.createElement('canvas');
+                offscreenCanvas.width = 1080;
+                offscreenCanvas.height = 1920;
+                const ctx = offscreenCanvas.getContext('2d', { alpha: false, willReadFrequently: true });
+                ctx.font = '500 43.5px Inter, -apple-system, BlinkMacSystemFont, Roboto, sans-serif';
+                ctx.textBaseline = 'top';
+
+                let currentTimeMs = 0;
+                const frameTimeMs = 1000 / fps;
+                
+                for (let frame = 0; frame < totalFrames; frame++) {
+                    if (frame % 5 === 0) {
+                        progressEl.innerText = `Rendering Frame ${frame + 1} / ${totalFrames}`;
+                        await new Promise(r => setTimeout(r, 0)); // Yield to main thread
+                    }
+                    
+                    let lineStartTimeMs = 0;
+                    let activeIdx = 0;
+                    for(let i=0; i<visualLines.length; i++) {
+                        const durMs = parseFloat(lineSettings[i].duration) * 1000;
+                        if (currentTimeMs >= lineStartTimeMs && currentTimeMs < lineStartTimeMs + durMs) {
+                            activeIdx = i;
+                            break;
+                        }
+                        lineStartTimeMs += durMs;
+                    }
+                    if (currentTimeMs >= lineStartTimeMs && activeIdx === 0) {
+                        activeIdx = visualLines.length - 1;
+                        lineStartTimeMs = 0;
+                        for(let i=0; i<visualLines.length - 1; i++) {
+                            lineStartTimeMs += parseFloat(lineSettings[i].duration) * 1000;
+                        }
+                    }
+
+                    const timeInLineMs = currentTimeMs - lineStartTimeMs;
+                    const activeLineSpans = visualLines[activeIdx];
+                    const settings = lineSettings[activeIdx];
+                    const containerHeight = scrollBox.h;
+                    
+                    const targetTranslation = (containerHeight / 2) - (activeLineSpans[0].offsetTop + activeLineSpans[0].offsetHeight / 2);
+                    let prevTranslation = targetTranslation;
+                    
+                    if (activeIdx > 0 && timeInLineMs < 600) {
+                        const prevSpans = visualLines[activeIdx - 1];
+                        prevTranslation = (containerHeight / 2) - (prevSpans[0].offsetTop + prevSpans[0].offsetHeight / 2);
+                    }
+                    
+                    let trackProgress = Math.min(timeInLineMs / 600, 1.0);
+                    trackProgress = 1 - Math.pow(1 - trackProgress, 4); 
+                    const currentTranslation = prevTranslation + (targetTranslation - prevTranslation) * trackProgress;
+                    
+                    let colorProgress = Math.min(timeInLineMs / 100, 1.0);
+
+                    // Draw Frame
+                    ctx.fillStyle = '#080808';
+                    ctx.fillRect(0, 0, 1080, 1920);
+                    
+                    for(let c of charsData) {
+                        let isCharActive = (c.lineIdx === activeIdx);
+                        let charColor = '#a6a6a6';
+                        
+                        if (isCharActive) {
+                            const targetColor = c.overrideColor || settings?.color || '#ffffff';
+                            const c1 = hexToRgb('#a6a6a6');
+                            const c2 = hexToRgb(targetColor);
+                            const r = Math.round(c1.r + (c2.r - c1.r) * colorProgress);
+                            const g = Math.round(c1.g + (c2.g - c1.g) * colorProgress);
+                            const b = Math.round(c1.b + (c2.b - c1.b) * colorProgress);
+                            charColor = `rgb(${r},${g},${b})`;
+                            
+                            if (colorProgress > 0) {
+                                ctx.shadowColor = charColor;
+                                ctx.shadowBlur = 2;
+                            } else {
+                                ctx.shadowBlur = 0;
+                            }
+                        } else {
+                            ctx.shadowBlur = 0;
+                        }
+                        
+                        ctx.fillStyle = charColor;
+                        ctx.fillText(c.text, c.baseX, c.baseY + currentTranslation);
+                    }
+                    
+                    ctx.shadowBlur = 0;
+                    
+                    const grad = ctx.createLinearGradient(0, scrollBox.y, 0, scrollBox.y + scrollBox.h);
+                    grad.addColorStop(0, 'rgba(8, 8, 8, 1)'); 
+                    grad.addColorStop(0.15, 'rgba(8, 8, 8, 0.75)'); 
+                    grad.addColorStop(0.40, 'rgba(8, 8, 8, 0)'); 
+                    grad.addColorStop(0.60, 'rgba(8, 8, 8, 0)'); 
+                    grad.addColorStop(0.85, 'rgba(8, 8, 8, 0.75)');
+                    grad.addColorStop(1.0, 'rgba(8, 8, 8, 1)');
+                    
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, scrollBox.y, 1080, scrollBox.h);
+                    
+                    ctx.fillStyle = '#080808';
+                    ctx.fillRect(0, 0, 1080, scrollBox.y);
+                    ctx.fillRect(0, scrollBox.y + scrollBox.h, 1080, 1920 - (scrollBox.y + scrollBox.h));
+                    
+                    const videoFrame = new VideoFrame(offscreenCanvas, { timestamp: currentTimeMs * 1000 });
+                    videoEncoder.encode(videoFrame, { keyFrame: frame % 30 === 0 });
+                    videoFrame.close();
+                    
+                    currentTimeMs += frameTimeMs;
+                }
+
+                progressEl.innerText = "Multiplexing MP4...";
+                await videoEncoder.flush();
+                muxer.finalize();
+                
+                const buffer = muxer.target.buffer;
+                const blob = new Blob([buffer], { type: 'video/mp4' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'captions-export.mp4';
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                progressEl.innerText = "Export Complete!";
+                
+                // Restore
+                screenEl.style.cssText = originalCssText;
+                wrapperEl.style.cssText = origWrapperCss;
+                track.style.transition = '';
+                highlightLine(currentLineIndex);
+
+            } catch (err) {
+                console.error(err);
+                progressEl.innerText = "Error: " + err.message;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Export Video";
+                btn.style.opacity = '1';
+                setTimeout(() => { if(progressEl.innerText === "Export Complete!") progressEl.style.display = 'none'; }, 3000);
+            }
+        }
+
+        function hexToRgb(hex) {
+            hex = hex.replace('#', '');
+            if(hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+            return {
+                r: parseInt(hex.substring(0,2), 16),
+                g: parseInt(hex.substring(2,4), 16),
+                b: parseInt(hex.substring(4,6), 16)
+            };
+        }
 
         init();
     </script>
