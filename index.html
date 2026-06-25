@@ -420,6 +420,7 @@
                 <label>Add New Text</label>
                 <textarea id="new-text-input" placeholder="Type new text here..." rows="3"></textarea>
                 <input type="number" id="new-duration-input" step="0.5" value="5.0" placeholder="Duration (s)">
+                <input type="file" id="new-audio-input" accept="audio/*" style="font-size: 11px; margin-bottom: 20px; color: var(--text-muted); width: 100%;">
                 <button class="primary-btn" onclick="addSegment()">Add Segment</button>
             </div>
         </div>
@@ -467,6 +468,9 @@
         
         let currentSelectionCharIds = [];
         let charOverrides = {}; 
+        
+        let currentlyPlayingSegIdx = -1;
+        let globalAudioObj = null;
 
         async function init() {
             try {
@@ -508,7 +512,7 @@
                 const words = seg.text.split(' ');
                 const timePerWord = parseFloat(seg.duration) / words.length;
                 
-                words.forEach((word) => {
+                words.forEach((word, wordIndex) => {
                     if(word.trim() === '') return;
                     
                     const wordSpan = document.createElement('span');
@@ -543,6 +547,13 @@
                     
                     track.appendChild(wordSpan);
                 });
+                
+                if (segIndex < segments.length - 1) {
+                    const br = document.createElement('div');
+                    br.style.flexBasis = '100%';
+                    br.style.height = '0px';
+                    track.appendChild(br);
+                }
             });
         }
 
@@ -579,6 +590,55 @@
             Object.keys(lineSettings).forEach(key => {
                 if (parseInt(key) >= visualLines.length) delete lineSettings[key];
             });
+            enforceSegmentAudioConstraints();
+        }
+
+        function enforceSegmentAudioConstraints() {
+            const segLines = {};
+            visualLines.forEach((line, lineIdx) => {
+                const segIdx = line[0].dataset.segIndex;
+                if (!segLines[segIdx]) segLines[segIdx] = [];
+                segLines[segIdx].push(lineIdx);
+            });
+
+            for (let segIdxStr in segLines) {
+                const segIdx = parseInt(segIdxStr);
+                const seg = segments[segIdx];
+                if (seg.audioDuration !== null && seg.audioDuration !== undefined) {
+                    const lines = segLines[segIdx];
+                    let currentTotal = 0;
+                    const durs = lines.map(lineIdx => {
+                        const d = parseFloat(lineSettings[lineIdx].duration);
+                        currentTotal += d;
+                        return d;
+                    });
+                    
+                    if (currentTotal <= 0) {
+                        lines.forEach(lineIdx => {
+                            lineSettings[lineIdx].duration = (seg.audioDuration / lines.length).toFixed(2);
+                        });
+                        continue;
+                    }
+
+                    let newTotal = 0;
+                    lines.forEach((lineIdx, i) => {
+                        let newDur = (durs[i] / currentTotal) * seg.audioDuration;
+                        newDur = Math.round(newDur * 100) / 100;
+                        if (newDur < 0.1) newDur = 0.1;
+                        lineSettings[lineIdx].duration = newDur.toFixed(2);
+                        newTotal += parseFloat(lineSettings[lineIdx].duration);
+                    });
+
+                    const diff = seg.audioDuration - newTotal;
+                    if (Math.abs(diff) > 0.001) {
+                        let lastIdx = lines[lines.length - 1];
+                        let lastDur = parseFloat(lineSettings[lastIdx].duration);
+                        let corrected = lastDur + diff;
+                        if (corrected < 0.1) corrected = 0.1;
+                        lineSettings[lastIdx].duration = corrected.toFixed(2);
+                    }
+                }
+            }
         }
 
         function playLoop() {
@@ -587,12 +647,36 @@
             
             if (currentLineIndex >= visualLines.length) currentLineIndex = 0;
             
-            currentSelectionCharIds = []; // Clear selection automatically on new lines
+            const currentSegIdx = visualLines[currentLineIndex][0].dataset.segIndex;
+            
+            if (currentSegIdx !== currentlyPlayingSegIdx) {
+                currentlyPlayingSegIdx = currentSegIdx;
+                const seg = segments[currentSegIdx];
+                if (globalAudioObj) {
+                    globalAudioObj.pause();
+                    globalAudioObj = null;
+                }
+                if (seg.audioBuffer) {
+                    const blob = new Blob([seg.audioBuffer]);
+                    const url = URL.createObjectURL(blob);
+                    globalAudioObj = new Audio(url);
+                    
+                    let offsetTime = 0;
+                    for(let i=0; i<currentLineIndex; i++) {
+                        if (visualLines[i][0].dataset.segIndex == currentSegIdx) {
+                            offsetTime += parseFloat(lineSettings[i].duration);
+                        }
+                    }
+                    
+                    globalAudioObj.currentTime = offsetTime;
+                    globalAudioObj.play();
+                }
+            }
+
+            currentSelectionCharIds = []; 
             highlightLine(currentLineIndex);
             updateInspector(); 
-            
             let durationMs = parseFloat(lineSettings[currentLineIndex].duration) * 1000;
-            
             lineTimer = setTimeout(() => {
                 currentLineIndex++;
                 playLoop();
@@ -650,15 +734,17 @@
             
             if (isPlaying) {
                 btn.innerText = "Pause";
-                window.getSelection().removeAllRanges(); // Force clear native highlight
+                window.getSelection().removeAllRanges(); 
                 currentSelectionCharIds = [];
+                currentlyPlayingSegIdx = -1; // Reset to ensure audio starts
                 playLoop();
             } else {
                 btn.innerText = "Play";
+                if (globalAudioObj) globalAudioObj.pause();
                 if (lineTimer) clearTimeout(lineTimer);
-                highlightLine(currentLineIndex); // Re-run to unlock text selection!
+                highlightLine(currentLineIndex); 
             }
-            updateInspector(); // Refresh disabled states
+            updateInspector(); 
         }
 
         function scrubToLine(offset) {
@@ -958,6 +1044,7 @@
 
                 document.getElementById('line-duration-input').addEventListener('change', (e) => {
                     updateLineDuration(lineIdx, e.target.value);
+                    e.target.value = lineSettings[lineIdx].duration;
                 });
             }
 
@@ -1003,7 +1090,41 @@
         }
 
         function updateLineDuration(index, val) {
-            lineSettings[index].duration = parseFloat(val) || 1.0;
+            let newDur = parseFloat(val) || 0.1;
+            if (newDur < 0.1) newDur = 0.1;
+
+            const segIdx = visualLines[index][0].dataset.segIndex;
+            const seg = segments[segIdx];
+
+            if (seg.audioDuration !== null && seg.audioDuration !== undefined) {
+                const segmentLineIndices = [];
+                visualLines.forEach((line, idx) => {
+                    if (line[0].dataset.segIndex == segIdx) segmentLineIndices.push(idx);
+                });
+
+                if (segmentLineIndices.length > 1) {
+                    const oldDur = parseFloat(lineSettings[index].duration);
+                    const diff = newDur - oldDur;
+                    
+                    const localIdx = segmentLineIndices.indexOf(index);
+                    let targetLocalIdx = localIdx + 1;
+                    if (targetLocalIdx >= segmentLineIndices.length) targetLocalIdx = localIdx - 1;
+                    
+                    const targetIdx = segmentLineIndices[targetLocalIdx];
+                    let targetDur = parseFloat(lineSettings[targetIdx].duration) - diff;
+                    
+                    if (targetDur < 0.1) {
+                        const maxAffordableDiff = parseFloat(lineSettings[targetIdx].duration) - 0.1;
+                        newDur = oldDur + maxAffordableDiff;
+                        targetDur = 0.1;
+                    }
+                    
+                    lineSettings[targetIdx].duration = targetDur.toFixed(2);
+                    lineSettings[index].duration = newDur.toFixed(2);
+                }
+            } else {
+                lineSettings[index].duration = newDur.toFixed(2);
+            }
         }
 
         function updateLineColor(index, val) {
@@ -1073,17 +1194,39 @@
             }
         }
 
-        function addSegment() {
+        async function addSegment() {
             const textInput = document.getElementById('new-text-input');
             const durInput = document.getElementById('new-duration-input');
+            const audioInput = document.getElementById('new-audio-input');
             if (textInput.value.trim() === '') return;
             
+            let segAudioBuffer = null;
+            let segAudioDuration = null;
+            let segDuration = parseFloat(durInput.value) || 5.0;
+
+            if (audioInput.files && audioInput.files[0]) {
+                const file = audioInput.files[0];
+                const url = URL.createObjectURL(file);
+                const tempAudio = new Audio(url);
+                await new Promise(r => {
+                    tempAudio.onloadedmetadata = () => {
+                        segAudioDuration = tempAudio.duration;
+                        segDuration = tempAudio.duration;
+                        r();
+                    };
+                });
+                segAudioBuffer = await file.arrayBuffer();
+            }
+
             segments.push({
                 text: textInput.value,
-                duration: parseFloat(durInput.value) || 5.0
+                duration: segDuration,
+                audioBuffer: segAudioBuffer,
+                audioDuration: segAudioDuration
             });
             
             textInput.value = '';
+            audioInput.value = '';
             refreshAll();
         }
 
@@ -1121,11 +1264,65 @@
                 }
                 const totalFrames = Math.ceil(totalDuration * fps);
                 
-                const muxer = new Mp4Muxer.Muxer({
+                const hasAnyAudio = segments.some(s => s.audioBuffer);
+                let EXPORT_SAMPLE_RATE = 44100;
+                let audioCodecConfig = 'mp4a.40.2';
+                let muxerAudioCodec = 'aac';
+                
+                if (hasAnyAudio) {
+                    try {
+                        const support = await AudioEncoder.isConfigSupported({
+                            codec: 'mp4a.40.2',
+                            sampleRate: EXPORT_SAMPLE_RATE,
+                            numberOfChannels: 2
+                        });
+                        if (!support.supported) throw new Error("AAC not supported");
+                    } catch (e) {
+                        audioCodecConfig = 'opus';
+                        muxerAudioCodec = 'opus';
+                        EXPORT_SAMPLE_RATE = 48000;
+                    }
+                }
+                
+                const muxerOptions = {
                     target: new Mp4Muxer.ArrayBufferTarget(),
                     video: { codec: 'avc', width: 1080, height: 1920 },
                     fastStart: 'in-memory'
-                });
+                };
+                
+                let audioCtx = null;
+                const segmentAudioData = {};
+                let audioEncoder = null;
+                
+                if (hasAnyAudio) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: EXPORT_SAMPLE_RATE });
+                    for(let i=0; i<segments.length; i++) {
+                        if (segments[i].audioBuffer) {
+                            segmentAudioData[i] = await audioCtx.decodeAudioData(segments[i].audioBuffer.slice(0));
+                        }
+                    }
+                    
+                    muxerOptions.audio = {
+                        codec: muxerAudioCodec,
+                        sampleRate: EXPORT_SAMPLE_RATE,
+                        numberOfChannels: 2
+                    };
+                }
+                
+                const muxer = new Mp4Muxer.Muxer(muxerOptions);
+
+                if (hasAnyAudio) {
+                    audioEncoder = new AudioEncoder({
+                        output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+                        error: e => console.error(e)
+                    });
+                    audioEncoder.configure({
+                        codec: audioCodecConfig,
+                        sampleRate: EXPORT_SAMPLE_RATE,
+                        numberOfChannels: 2,
+                        bitrate: 128_000
+                    });
+                }
 
                 const videoEncoder = new VideoEncoder({
                     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
@@ -1288,6 +1485,64 @@
                     videoFrame.close();
                     
                     currentTimeMs += frameTimeMs;
+                }
+                
+                if (audioEncoder) {
+                    progressEl.innerText = "Encoding Audio...";
+                    await new Promise(r => setTimeout(r, 0));
+                    
+                    const chunkFrames = EXPORT_SAMPLE_RATE; 
+                    let globalTime = 0; 
+                    
+                    for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+                        let segDuration = 0;
+                        for(let i=0; i<visualLines.length; i++) {
+                            if (visualLines[i][0].dataset.segIndex == segIdx) {
+                                segDuration += parseFloat(lineSettings[i].duration);
+                            }
+                        }
+                        
+                        const decodedAudio = segmentAudioData[segIdx];
+                        const segFrames = Math.floor(segDuration * EXPORT_SAMPLE_RATE);
+                        let offset = 0;
+                        
+                        while (offset < segFrames) {
+                            const curChunkFrames = Math.min(chunkFrames, segFrames - offset);
+                            const planarData = new Float32Array(2 * curChunkFrames);
+                            
+                            if (decodedAudio) {
+                                for (let c = 0; c < 2; c++) {
+                                    const channelIndex = c < decodedAudio.numberOfChannels ? c : 0;
+                                    const channelData = decodedAudio.getChannelData(channelIndex);
+                                    
+                                    const available = Math.max(0, decodedAudio.length - offset);
+                                    const copyLen = Math.min(curChunkFrames, available);
+                                    
+                                    if (copyLen > 0) {
+                                        planarData.set(channelData.subarray(offset, offset + copyLen), c * curChunkFrames);
+                                    }
+                                }
+                            }
+
+                            const audioData = new AudioData({
+                                format: 'f32-planar',
+                                sampleRate: EXPORT_SAMPLE_RATE,
+                                numberOfChannels: 2,
+                                numberOfFrames: curChunkFrames,
+                                timestamp: (globalTime * 1000000), 
+                                data: planarData
+                            });
+                            
+                            if (audioEncoder.state === 'configured') {
+                                audioEncoder.encode(audioData);
+                            }
+                            audioData.close();
+                            
+                            offset += curChunkFrames;
+                            globalTime += (curChunkFrames / EXPORT_SAMPLE_RATE);
+                        }
+                    }
+                    await audioEncoder.flush();
                 }
 
                 progressEl.innerText = "Multiplexing MP4...";
