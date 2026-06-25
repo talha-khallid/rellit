@@ -18,38 +18,75 @@
             --danger: #d93025;
         }
 
+        /* --- Clean Scrollbars --- */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a2a2a;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+
         body, html {
             margin: 0;
             padding: 0;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             background-color: var(--bg-main);
-            display: flex;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
             -webkit-font-smoothing: antialiased;
             color: var(--text-main);
             overflow: hidden;
+            user-select: none; /* Prevents global selection */
+            -webkit-user-select: none;
+        }
+
+        input, textarea {
+            user-select: auto; /* Allows selection inside inputs */
+            -webkit-user-select: auto;
         }
 
         .editor-container {
             display: flex;
             width: 100%;
             height: 100%;
+            justify-content: space-between; /* Locks sidebars to edges */
         }
 
         .sidebar {
             width: 380px;
+            min-width: 280px;
+            max-width: 50vw;
+            flex-shrink: 0; 
             background-color: var(--bg-sidebar);
             padding: 40px 30px;
             box-sizing: border-box;
             overflow-y: auto;
+            overflow-x: hidden;
             display: flex;
             flex-direction: column;
             border-right: 1px solid var(--border);
+            resize: horizontal; /* Makes left sidebar expandable */
         }
 
         .sidebar.right-sidebar {
             border-right: none;
             border-left: 1px solid var(--border);
+            direction: rtl; /* Pure CSS hack to allow horizontal resize from the left edge */
+            resize: horizontal;
+        }
+
+        /* Revert the content direction back to normal inside the right sidebar */
+        .sidebar.right-sidebar > * {
+            direction: ltr;
+            text-align: left;
         }
 
         .sidebar h2 {
@@ -68,6 +105,7 @@
             justify-content: center;
             align-items: center;
             background-color: var(--bg-main);
+            min-width: 0; /* Ensures flex container doesn't blow out */
         }
 
         /* --- Clean UI Elements --- */
@@ -83,29 +121,35 @@
             color: #ccc;
             margin: 0 0 8px 0;
             line-height: 1.5;
-            padding-right: 20px;
         }
 
         .segment-meta {
             font-size: 11px;
             color: var(--text-muted);
-            margin: 0;
+            margin: 0 0 12px 0;
             font-family: monospace;
         }
 
-        .btn-delete {
-            position: absolute;
-            right: 0;
-            top: 20px;
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 14px;
-            padding: 4px;
-            transition: color 0.2s;
+        .segment-actions {
+            display: flex;
+            gap: 8px;
         }
-        .btn-delete:hover { color: var(--danger); }
+
+        .btn-action {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 6px 12px;
+            font-size: 11px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+        .btn-action:hover { color: #fff; border-color: #444; }
+        .btn-action.delete:hover { color: var(--danger); border-color: var(--danger); }
 
         .add-section {
             margin-top: auto;
@@ -137,7 +181,12 @@
             transition: border-color 0.2s;
         }
 
-        input:focus, textarea:focus {
+        input:disabled, textarea:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        input:focus:not(:disabled), textarea:focus:not(:disabled) {
             border-color: #333;
         }
 
@@ -147,7 +196,7 @@
             line-height: 1.5;
         }
 
-        button {
+        button.primary-btn {
             cursor: pointer;
             background: #fff;
             color: #000;
@@ -160,7 +209,7 @@
             font-size: 13px;
         }
 
-        button:hover { opacity: 0.85; }
+        button.primary-btn:hover { opacity: 0.85; }
         
         button.play-btn {
             background: transparent;
@@ -170,6 +219,7 @@
             font-size: 11px;
             letter-spacing: 1.5px;
             padding: 14px;
+            cursor: pointer;
         }
         button.play-btn:hover { border-color: #444; background: var(--bg-input); }
 
@@ -179,8 +229,13 @@
             border: 1px solid var(--border);
             font-weight: 500;
             margin-top: 10px;
+            cursor: pointer;
+            padding: 12px;
+            width: 100%;
+            border-radius: 6px;
         }
-        button.btn-ghost:hover { border-color: #444; color: #fff; }
+        button.btn-ghost:hover:not(:disabled) { border-color: #444; color: #fff; }
+        button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* Right sidebar specifics */
         .context-label {
@@ -203,13 +258,6 @@
         .prop-group {
             margin-bottom: 30px;
         }
-
-        .prop-row {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .prop-row > div { flex: 1; }
 
         /* Custom Color Picker UI */
         .custom-color-picker {
@@ -239,25 +287,42 @@
             box-shadow: 0 0 4px rgba(0,0,0,0.6);
             pointer-events: none; 
         }
-        #hue-slider {
+        .hue-slider {
             -webkit-appearance: none;
             width: 100%;
-            height: 12px;
-            border-radius: 6px;
+            height: 10px;
+            border-radius: 5px;
             background: linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
             outline: none;
             padding: 0;
             margin: 0;
         }
-        #hue-slider::-webkit-slider-thumb {
+        .hue-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
             background: #fff;
             border: 1px solid #aaa;
             cursor: pointer;
             box-shadow: 0 0 3px rgba(0,0,0,0.5);
+        }
+        .hex-text-input {
+            background: #111;
+            border: 1px solid var(--border);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 13px;
+            outline: none;
+            width: 100%;
+            text-transform: uppercase;
+            box-sizing: border-box;
+            margin: 0 !important;
+        }
+        .hex-text-input:focus {
+            border-color: #444;
         }
 
         /* --- Mobile Screen --- */
@@ -306,7 +371,6 @@
             display: inline;
         }
 
-        /* Shifted transitions and styling strictly to individual characters */
         .char {
             font-weight: 500;
             color: #a6a6a6;
@@ -339,7 +403,7 @@
                 <label>Add New Text</label>
                 <textarea id="new-text-input" placeholder="Type new text here..." rows="3"></textarea>
                 <input type="number" id="new-duration-input" step="0.5" value="5.0" placeholder="Duration (s)">
-                <button onclick="addSegment()">Add Segment</button>
+                <button class="primary-btn" onclick="addSegment()">Add Segment</button>
             </div>
         </div>
 
@@ -384,7 +448,6 @@
         let lineTimer = null;
         let isPlaying = true;
         
-        // Selection & override state now target individual chars
         let currentSelectionCharIds = [];
         let charOverrides = {}; 
 
@@ -436,7 +499,6 @@
                     wordSpan.dataset.baseDuration = timePerWord;
                     wordSpan.dataset.segIndex = segIndex;
                     
-                    // Split word into individually selectable characters
                     const chars = word.split('');
                     chars.forEach(char => {
                         const charSpan = document.createElement('span');
@@ -452,7 +514,6 @@
                         globalCharIndex++;
                     });
                     
-                    // Add space inside the wordSpan to maintain structure cleanly
                     const spaceSpan = document.createElement('span');
                     spaceSpan.className = 'char space';
                     spaceSpan.textContent = ' ';
@@ -509,6 +570,7 @@
             
             if (currentLineIndex >= visualLines.length) currentLineIndex = 0;
             
+            currentSelectionCharIds = []; // Clear selection automatically on new lines
             highlightLine(currentLineIndex);
             updateInspector(); 
             
@@ -523,11 +585,9 @@
         function highlightLine(index) {
             if (index < 0 || index >= visualLines.length) return;
             
-            // Clear all styling and strictly block selection outside the active line
             document.querySelectorAll('.word').forEach(w => {
                 w.classList.remove('active-word');
                 w.style.pointerEvents = 'none'; 
-                w.style.userSelect = 'none';    
                 
                 w.querySelectorAll('.char').forEach(c => {
                     c.style.color = '';
@@ -538,11 +598,9 @@
             const activeLineSpans = visualLines[index];
             const settings = lineSettings[index];
             
-            // Apply styles and enable selection only for the active line
             activeLineSpans.forEach(wordSpan => {
                 wordSpan.classList.add('active-word');
-                wordSpan.style.pointerEvents = 'auto'; 
-                wordSpan.style.userSelect = 'text';    
+                wordSpan.style.pointerEvents = 'auto'; // Only active line is selectable
                 
                 wordSpan.querySelectorAll('.char').forEach(charSpan => {
                     const color = charSpan.dataset.overrideColor || settings?.color || '#ffffff';
@@ -551,7 +609,6 @@
                 });
             });
             
-            // Scroll to center
             const track = document.getElementById('caption-track');
             const container = document.getElementById('scroll-container');
             const containerHeight = container.clientHeight;
@@ -569,20 +626,26 @@
             const btn = document.getElementById('play-pause-btn');
             if (isPlaying) {
                 btn.innerText = "Pause";
+                currentSelectionCharIds = [];
                 playLoop();
             } else {
                 btn.innerText = "Play";
                 if (lineTimer) clearTimeout(lineTimer);
             }
+            updateInspector(); // Refresh disabled states
         }
 
         function scrubToLine(offset) {
             let newIndex = currentLineIndex + offset;
             if (newIndex < 0) newIndex = 0;
             if (newIndex >= visualLines.length) newIndex = visualLines.length - 1;
-            currentLineIndex = newIndex;
-            highlightLine(currentLineIndex);
-            updateInspector();
+            
+            if (currentLineIndex !== newIndex) {
+                currentLineIndex = newIndex;
+                currentSelectionCharIds = []; // Auto-show line inspector when scrolling
+                highlightLine(currentLineIndex);
+                updateInspector();
+            }
         }
 
         function setupScrubbing() {
@@ -602,7 +665,6 @@
                 const selection = window.getSelection();
                 const track = document.getElementById('caption-track');
                 
-                // Do not clear the tracked selection if clicking in the sidebar
                 if (!selection.rangeCount || !track.contains(selection.anchorNode)) return;
 
                 if (selection.isCollapsed) {
@@ -616,7 +678,6 @@
                 const charSpans = track.querySelectorAll('.char');
                 const selectedIds = [];
                 
-                // Fine-grained character detection
                 charSpans.forEach(span => {
                     if (selection.containsNode(span, true)) {
                         selectedIds.push(span.dataset.charId);
@@ -626,7 +687,7 @@
                 const selectionChanged = JSON.stringify(selectedIds) !== JSON.stringify(currentSelectionCharIds);
                 if (selectionChanged && selectedIds.length > 0) {
                     currentSelectionCharIds = selectedIds;
-                    updateInspector();
+                    if (!isPlaying) updateInspector();
                 }
             });
         }
@@ -672,32 +733,59 @@
             const container = document.getElementById(mountId);
             let { h, s, v } = hexToHsv(initialHex || '#ffffff');
             
+            const disabledStyle = isPlaying ? "opacity: 0.4; pointer-events: none;" : "";
+
             container.innerHTML = `
-                <label>Color Override</label>
-                <div class="custom-color-picker">
+                <div class="custom-color-picker" style="${disabledStyle}">
                     <div class="color-area" id="color-area-${mountId}" style="background-color: hsl(${h}, 100%, 50%);">
                         <div class="color-dot" id="color-dot-${mountId}" style="left: ${s}%; top: ${100 - v}%;"></div>
                     </div>
-                    <div style="display:flex; align-items:center; gap: 15px;">
-                        <input type="range" id="hue-slider-${mountId}" min="0" max="360" value="${h}">
-                        <div id="color-preview-${mountId}" style="width:28px; height:28px; border-radius:6px; background:${initialHex}; border:1px solid var(--border); flex-shrink:0;"></div>
+                    <div style="margin-top: 15px; margin-bottom: 20px;">
+                        <input type="range" class="hue-slider" id="hue-slider-${mountId}" min="0" max="360" value="${h}">
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                        <div id="color-preview-${mountId}" style="width: 32px; height: 32px; border-radius: 6px; background: ${initialHex}; border: 1px solid var(--border); flex-shrink: 0;"></div>
+                        <input type="text" id="hex-input-${mountId}" value="${initialHex.toUpperCase()}" class="hex-text-input">
                     </div>
                 </div>
             `;
+
+            if (isPlaying) return; // Skip event bindings if disabled
 
             setTimeout(() => {
                 const area = document.getElementById(`color-area-${mountId}`);
                 const dot = document.getElementById(`color-dot-${mountId}`);
                 const hueSlider = document.getElementById(`hue-slider-${mountId}`);
                 const preview = document.getElementById(`color-preview-${mountId}`);
+                const hexInput = document.getElementById(`hex-input-${mountId}`);
                 let isDragging = false;
 
                 function emitColor() {
                     const hex = hsvToHex(h, s, v);
                     area.style.backgroundColor = `hsl(${h}, 100%, 50%)`;
                     preview.style.backgroundColor = hex;
+                    hexInput.value = hex.toUpperCase();
                     onChangeCallback(hex);
                 }
+
+                // Bind Hex Input changes
+                hexInput.addEventListener('change', (e) => {
+                    let val = e.target.value.trim();
+                    if (!val.startsWith('#')) val = '#' + val;
+                    if (/^#[0-9A-Fa-f]{6}$/i.test(val)) {
+                        const hsv = hexToHsv(val);
+                        h = hsv.h; s = hsv.s; v = hsv.v;
+                        hueSlider.value = h;
+                        dot.style.left = `${s}%`;
+                        dot.style.top = `${100 - v}%`;
+                        area.style.backgroundColor = `hsl(${h}, 100%, 50%)`;
+                        preview.style.backgroundColor = val;
+                        onChangeCallback(val);
+                    } else {
+                        hexInput.value = hsvToHex(h, s, v).toUpperCase(); // Reset if invalid
+                    }
+                });
 
                 const clearNativeSelection = () => window.getSelection().removeAllRanges();
 
@@ -709,7 +797,7 @@
 
                 area.addEventListener('mousedown', (e) => {
                     isDragging = true;
-                    clearNativeSelection(); // Makes live edits cleanly visible on the text
+                    clearNativeSelection(); 
                     updateFromMouse(e);
                 });
 
@@ -720,7 +808,6 @@
                 
                 const onMouseUp = () => { isDragging = false; };
 
-                // Fixes the UI unresponsiveness by attaching drag completely outside the element bounds
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
 
@@ -739,7 +826,6 @@
                     emitColor();
                 }
 
-                // Append cleanup to prevent memory leaks during inspector rewrites
                 container.parentElement.cleanupPicker = () => {
                     document.removeEventListener('mousemove', onMouseMove);
                     document.removeEventListener('mouseup', onMouseUp);
@@ -757,14 +843,18 @@
             }
             container.innerHTML = '';
 
+            const disabledNotice = isPlaying 
+                ? `<div style="background: var(--bg-input); padding: 10px; border-radius: 6px; border: 1px solid var(--border); color: var(--accent); font-size: 11px; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.5px;">⏸ Pause playback to edit</div>`
+                : '';
+
             if (currentSelectionCharIds.length > 0) {
-                renderSelectionInspector(container);
+                renderSelectionInspector(container, disabledNotice);
             } else {
-                renderLineInspector(container);
+                renderLineInspector(container, disabledNotice);
             }
         }
 
-        function renderLineInspector(container) {
+        function renderLineInspector(container, disabledNotice) {
             const lineIdx = currentLineIndex;
             if (!lineSettings[lineIdx]) return;
 
@@ -774,56 +864,57 @@
             const segIndex = activeLine[0].dataset.segIndex;
             const segText = segments[segIndex].text;
 
+            const disabledAttr = isPlaying ? "disabled" : "";
+
             container.innerHTML = `
+                ${disabledNotice}
                 <span class="context-label">Active Line</span>
                 <h3 class="context-title">Line ${lineIdx + 1}</h3>
                 
                 <div class="prop-group">
                     <label>Text Content <span style="opacity:0.4; font-weight:400;">(Segment ${parseInt(segIndex)+1})</span></label>
-                    <textarea id="line-text-editor" rows="4">${segText}</textarea>
+                    <textarea id="line-text-editor" rows="4" ${disabledAttr}>${segText}</textarea>
                 </div>
 
-                <div class="prop-row">
-                    <div>
-                        <label>Duration (s)</label>
-                        <input type="number" step="0.1" value="${lineSettings[lineIdx].duration}" id="line-duration-input">
-                    </div>
+                <div class="prop-group">
+                    <label>Duration (s)</label>
+                    <input type="number" step="0.1" value="${lineSettings[lineIdx].duration}" id="line-duration-input" ${disabledAttr}>
                 </div>
                 
+                <label>Line Color</label>
                 <div id="picker-mount-line"></div>
-
-                <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px; line-height: 1.4;">
-                    Highlight specific words on the screen to override their individual color.
-                </p>
             `;
 
-            const textEditor = document.getElementById('line-text-editor');
-            textEditor.addEventListener('focus', () => {
-                if (isPlaying) togglePlayback(); 
-            });
-            textEditor.addEventListener('input', (e) => updateSegmentText(segIndex, e.target.value));
+            if (!isPlaying) {
+                const textEditor = document.getElementById('line-text-editor');
+                textEditor.addEventListener('input', (e) => updateSegmentText(segIndex, e.target.value));
 
-            document.getElementById('line-duration-input').addEventListener('change', (e) => {
-                updateLineDuration(lineIdx, e.target.value);
-            });
+                document.getElementById('line-duration-input').addEventListener('change', (e) => {
+                    updateLineDuration(lineIdx, e.target.value);
+                });
+            }
 
             renderCustomColorPicker('picker-mount-line', lineSettings[lineIdx].color, (color) => {
                 updateLineColor(lineIdx, color);
             });
         }
 
-        function renderSelectionInspector(container) {
+        function renderSelectionInspector(container, disabledNotice) {
             const firstSpan = document.querySelector(`[data-char-id="${currentSelectionCharIds[0]}"]`);
             const firstCharColor = firstSpan?.dataset.overrideColor || lineSettings[currentLineIndex]?.color || '#ffffff';
 
+            const disabledAttr = isPlaying ? "disabled" : "";
+
             container.innerHTML = `
+                ${disabledNotice}
                 <span class="context-label">Selection Override</span>
                 <h3 class="context-title">${currentSelectionCharIds.length} Letters</h3>
                 
+                <label>Highlight Color</label>
                 <div id="picker-mount-selection"></div>
                 
-                <button class="btn-ghost" onclick="clearSelectionOverrides()">Reset to Line Color</button>
-                <button class="btn-ghost" onclick="deselectAll()">Deselect</button>
+                <button class="btn-ghost" onclick="clearSelectionOverrides()" ${disabledAttr}>Reset to Line Color</button>
+                <button class="btn-ghost" onclick="deselectAll()" ${disabledAttr}>Deselect</button>
             `;
 
             renderCustomColorPicker('picker-mount-selection', firstCharColor, (color) => {
@@ -893,10 +984,26 @@
                 item.innerHTML = `
                     <p class="segment-text">"${seg.text}"</p>
                     <p class="segment-meta">Duration: ${seg.duration}s</p>
-                    <button class="btn-delete" onclick="removeSegment(${i})">✕</button>
+                    <div class="segment-actions">
+                        <button class="btn-action" onclick="editSegment(${i})">✎ Edit</button>
+                        <button class="btn-action delete" onclick="removeSegment(${i})">✕</button>
+                    </div>
                 `;
                 list.appendChild(item);
             });
+        }
+
+        function editSegment(index) {
+            if (isPlaying) togglePlayback();
+            
+            // Find the visual line that belongs to this segment
+            const targetLineIdx = visualLines.findIndex(line => parseInt(line[0].dataset.segIndex) === index);
+            if (targetLineIdx !== -1) {
+                currentSelectionCharIds = [];
+                currentLineIndex = targetLineIdx;
+                highlightLine(currentLineIndex);
+                updateInspector();
+            }
         }
 
         function addSegment() {
