@@ -11,18 +11,40 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         globalAudioObj, setGlobalAudioObj,
         currentlyPlayingSegIdx, setCurrentlyPlayingSegIdx,
         charOverrides,
-        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef
+        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef,
+        timelineScale
     } = useContext(EditorContext);
+
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isLooping, setIsLooping] = useState(true);
+    const [currentTimeDisplay, setCurrentTimeDisplay] = useState('00:00');
+    const [totalTimeDisplay, setTotalTimeDisplay] = useState('00:00');
 
     const trackRef = useRef(null);
     const scrollContainerRef = useRef(null);
     const screenRef = useRef(null);
+    const containerRef = useRef(null);
     const [screenScale, setScreenScale] = useState(1);
     
     const lineTimerRef = useRef(null);
     const [renderedWords, setRenderedWords] = useState([]);
 
-    // 1. Convert segments into rendered words map
+    const formatTime = (secs) => {
+        if (isNaN(secs) || secs < 0) return '00:00';
+        const m = Math.floor(secs / 60).toString().padStart(2, '0');
+        const s = Math.floor(secs % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    };
+
+    const getTotalDuration = () => {
+        return visualLines.reduce((acc, _, i) => acc + parseFloat(lineSettings[i]?.duration || 0.1), 0);
+    };
+
+    // React Fullscreen Handler
+    const toggleFullscreen = () => {
+        setIsFullscreen(!isFullscreen);
+    };
+
     useEffect(() => {
         const words = [];
         let globalCharIndex = 0;
@@ -34,10 +56,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
             segWords.forEach((word, wordIndex) => {
                 if (word.trim() === '') return;
                 
-                const chars = word.split('').map(char => ({
-                    char,
-                    id: globalCharIndex++
-                }));
+                const chars = word.split('').map(char => ({ char, id: globalCharIndex++ }));
                 
                 words.push({
                     chars,
@@ -52,7 +71,6 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         setRenderedWords(words);
     }, [segments]);
 
-    // 2. Calculate visual lines once words are rendered
     useLayoutEffect(() => {
         if (!trackRef.current || renderedWords.length === 0) return;
         
@@ -92,7 +110,6 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         };
 
         calculateVisualLines();
-
         let resizeTimeout;
         const handleResize = () => {
             clearTimeout(resizeTimeout);
@@ -111,7 +128,6 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         // eslint-disable-next-line
     }, [renderedWords, setVisualLines]);
 
-    // 3. Highlight line translation logic
     useEffect(() => {
         if (visualLines.length === 0 || !trackRef.current || !scrollContainerRef.current) return;
         
@@ -127,26 +143,62 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         
     }, [currentLineIndex, visualLines]);
 
-    // 4. Update screen scale on resize
     useLayoutEffect(() => {
         const updateScreenScale = () => {
-            const container = document.querySelector('.mobile-screen-container');
-            if(container) {
-                const scale = container.clientHeight / 1920;
-                setScreenScale(scale);
-            }
+            if (!containerRef.current || !screenRef.current) return;
+            const containerHeight = containerRef.current.clientHeight - (isFullscreen ? 0 : 48); 
+            const scale = containerHeight / 1920;
+            setScreenScale(scale);
         };
+        
         updateScreenScale();
         window.addEventListener('resize', updateScreenScale);
-        return () => window.removeEventListener('resize', updateScreenScale);
-    }, []);
+        const t1 = setTimeout(updateScreenScale, 50);
+        
+        return () => {
+            window.removeEventListener('resize', updateScreenScale);
+            clearTimeout(t1);
+        };
+    }, [isFullscreen, visualLines, lineSettings]);
 
-    // 5. Playback Loop
+    useEffect(() => {
+        let frameId;
+        const updateTrackedTime = () => {
+            if (visualLines.length > 0) {
+                if (isPlaying) {
+                    const elapsed = (performance.now() - currentLineStartSysTimeRef.current) / 1000;
+                    const calculatedTime = currentLineStartTimeSecondsRef.current + Math.max(0, elapsed);
+                    const absoluteTotal = getTotalDuration();
+                    setCurrentTimeDisplay(formatTime(Math.min(calculatedTime, absoluteTotal)));
+                } else {
+                    let staticTime = 0;
+                    for (let i = 0; i < currentLineIndex; i++) {
+                        staticTime += parseFloat(lineSettings[i]?.duration || 0.1);
+                    }
+                    setCurrentTimeDisplay(formatTime(staticTime));
+                }
+                setTotalTimeDisplay(formatTime(getTotalDuration()));
+            }
+            frameId = requestAnimationFrame(updateTrackedTime);
+        };
+        frameId = requestAnimationFrame(updateTrackedTime);
+        return () => cancelAnimationFrame(frameId);
+        // eslint-disable-next-line
+    }, [isPlaying, currentLineIndex, visualLines, lineSettings]);
+
     const playLoop = () => {
         if (!isPlaying || visualLines.length === 0) return;
         
         let targetLineIdx = currentLineIndex;
-        if (targetLineIdx >= visualLines.length) targetLineIdx = 0;
+        if (targetLineIdx >= visualLines.length) {
+            if (isLooping) {
+                targetLineIdx = 0;
+                setCurrentLineIndex(0);
+            } else {
+                togglePlayback();
+                return;
+            }
+        }
         
         let startSecs = 0;
         for(let i = 0; i < targetLineIdx; i++) {
@@ -191,17 +243,34 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         }, durationMs);
     };
 
+    // TIMEOUT GLITCH FIX: Strict cleanup before starting a new cycle
     useEffect(() => {
+        if (lineTimerRef.current) {
+            clearTimeout(lineTimerRef.current);
+        }
+
         if (isPlaying) {
             playLoop();
         } else {
-            if (lineTimerRef.current) clearTimeout(lineTimerRef.current);
             if (globalAudioObj) globalAudioObj.pause();
         }
-        // eslint-disable-next-line
-    }, [isPlaying, currentLineIndex]);
 
-    // 6. Scrubbing
+        return () => {
+            if (lineTimerRef.current) clearTimeout(lineTimerRef.current);
+        };
+        // eslint-disable-next-line
+    }, [isPlaying, currentLineIndex, isLooping]);
+
+    const skipNextLine = () => {
+        if (visualLines.length === 0) return;
+        setCurrentLineIndex(prev => (prev + 1 >= visualLines.length ? 0 : prev + 1));
+    };
+
+    const skipPrevLine = () => {
+        if (visualLines.length === 0) return;
+        setCurrentLineIndex(prev => (prev - 1 < 0 ? visualLines.length - 1 : prev - 1));
+    };
+
     const scrubToLine = (offset) => {
         setCurrentLineIndex(prev => {
             let newIndex = prev + offset;
@@ -212,8 +281,6 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         setCurrentSelectionCharIds([]);
     };
 
-    // 7. CRITICAL MATRICES UPDATE PIPELINE EXPORTER
-    // Hooks into Context engine updates to compile 1080x1920 layout matrices dynamically
     const captureExportGeometry = () => {
         if (!screenRef.current || !scrollContainerRef.current || !trackRef.current || visualLines.length === 0) return;
 
@@ -226,7 +293,6 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         const originalWrapperCss = wrapperEl ? wrapperEl.style.cssText : '';
         const trackEl = trackRef.current;
 
-        // Temporarily append to root context to safely clear CSS scale calculations
         document.body.appendChild(screenEl);
 
         screenEl.style.cssText = 'width: 1080px !important; height: 1920px !important; max-width: none !important; position: absolute !important; top: 0 !important; left: 0 !important; z-index: -1000 !important; transform: scale(1) !important; display: flex !important; alignItems: center !important; background-color: #050505 !important; border-radius: 0 !important;';
@@ -237,7 +303,6 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         const originalTrackTransform = trackEl.style.transform;
         trackEl.style.transform = 'translateY(0px)';
 
-        // Force browser layout redraw
         screenEl.getBoundingClientRect();
 
         const screenRect = screenEl.getBoundingClientRect();
@@ -270,7 +335,6 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
 
         setCharsData(charsData);
 
-        // Put things right back in the workflow
         screenEl.style.cssText = originalCssText;
         if (wrapperEl) wrapperEl.style.cssText = originalWrapperCss;
         trackEl.style.transform = originalTrackTransform;
@@ -289,7 +353,6 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         // eslint-disable-next-line
     }, [visualLines, charOverrides, lineSettings, screenScale]);
 
-    // Selection Handling
     useEffect(() => {
         const handleSelection = () => {
             if (isPlaying) return;
@@ -301,7 +364,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                 return;
             }
 
-            const charSpans = trackRef.current.querySelectorAll('.char');
+            const charSpans = trackRef.current.querySelectorAll('.word.active-word .char');
             const selectedIds = [];
             charSpans.forEach(span => {
                 if (selection.containsNode(span, true)) {
@@ -309,7 +372,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                 }
             });
 
-            if (selectedIds.length > 0 && selectedIds.join(',') !== currentSelectionCharIds.join(',')) {
+            if (selectedIds.join(',') !== currentSelectionCharIds.join(',')) {
                 setCurrentSelectionCharIds(selectedIds);
             }
         };
@@ -318,15 +381,67 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         return () => document.removeEventListener('selectionchange', handleSelection);
     }, [isPlaying, currentSelectionCharIds, setCurrentSelectionCharIds]);
 
+    let selectionHasUniformOverride = false;
+    if (currentSelectionCharIds.length > 0) {
+        const firstId = currentSelectionCharIds[0];
+        const firstColor = charOverrides[firstId];
+        if (firstColor) {
+            selectionHasUniformOverride = currentSelectionCharIds.every(id => charOverrides[id] === firstColor);
+        }
+    }
+
     return (
-        <div className="center-preview" onMouseDown={(e) => {
-            if (!e.target.closest('.word') && !isPlaying) {
-                window.getSelection().removeAllRanges();
-                setCurrentSelectionCharIds([]);
-            }
-        }}>
-            <div className="preview-wrapper" style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, paddingBottom: 10, boxSizing: 'border-box' }}>
-                <div className="mobile-screen-container" style={{ position: 'relative', flex: 1, height: 'auto', aspectRatio: '9/16', maxHeight: 'calc(100% - 70px)', overflow: 'hidden', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 20px 50px rgba(0,0,0,0.8)' }}>
+        <div 
+            ref={containerRef}
+            className="center-preview" 
+            style={{ 
+                backgroundColor: '#000000',
+                padding: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                height: '100%',
+                width: '100%',
+                overflow: 'hidden',
+                ...(isFullscreen ? {
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    zIndex: 99999,
+                    background: '#000000'
+                } : { position: 'relative' })
+            }} 
+            onMouseDown={(e) => {
+                // Deselect logic when clicking empty space
+                if (!e.target.closest('.word') && !isPlaying) {
+                    window.getSelection().removeAllRanges();
+                    setCurrentSelectionCharIds([]);
+                }
+            }}
+        >
+            <div 
+                style={{ 
+                    flex: 1, 
+                    width: '100%', 
+                    position: 'relative', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    background: '#000000'
+                }}
+            >
+                <div 
+                    className="mobile-screen-container" 
+                    style={{ 
+                        position: 'relative', 
+                        height: '100%',
+                        aspectRatio: '9/16', 
+                        overflow: 'hidden', 
+                        background: '#050505',
+                        boxShadow: 'none',
+                        borderRadius: 0,
+                        border: 'none'
+                    }}
+                >
                     <div 
                         className="mobile-screen" 
                         id="mobile-screen" 
@@ -334,8 +449,8 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                         style={{
                             width: 1080, height: 1920, backgroundColor: '#050505',
                             boxSizing: 'border-box', display: 'flex', alignItems: 'center',
-                            position: 'absolute', top: 0, left: 0, transformOrigin: 'top left',
-                            transform: `scale(${screenScale})`
+                            position: 'absolute', top: '50%', left: '50%', transformOrigin: 'top left',
+                            transform: `scale(${screenScale}) translate(-50%, -50%)`
                         }}
                     >
                         <div className="caption-wrapper" style={{ width: '100%', paddingLeft: 54, paddingRight: 157, boxSizing: 'border-box', fontSize: 43.5, lineHeight: 1.45 }}>
@@ -343,15 +458,15 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                                 className="caption-scroll-container" 
                                 id="scroll-container" 
                                 ref={scrollContainerRef}
-                                onWheel={(e) => {
-                                    if (isPlaying) return;
-                                    e.preventDefault();
-                                    scrubToLine(e.deltaY > 0 ? 1 : -1);
-                                }}
                                 style={{
                                     width: '100%', height: '10.15em', overflow: 'hidden', position: 'relative',
                                     WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 15%, rgba(0,0,0,1) 40%, rgba(0,0,0,1) 60%, rgba(0,0,0,0.25) 85%, rgba(0,0,0,0) 100%)',
                                     maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 15%, rgba(0,0,0,1) 40%, rgba(0,0,0,1) 60%, rgba(0,0,0,0.25) 85%, rgba(0,0,0,0) 100%)'
+                                }}
+                                onWheel={(e) => {
+                                    if (isPlaying) return;
+                                    e.preventDefault();
+                                    scrubToLine(e.deltaY > 0 ? 1 : -1);
                                 }}
                             >
                                 <div className="caption-track" id="caption-track" ref={trackRef} style={{ position: 'relative', transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.3, 1)', willChange: 'transform', textAlign: 'left' }}>
@@ -360,6 +475,9 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                                         if (visualLines[currentLineIndex]) {
                                             active = visualLines[currentLineIndex].some(span => span.el.dataset.segIndex == word.segIndex && parseInt(span.el.dataset.wordIdx) === wIdx);
                                         }
+
+                                        // STRICT SELECTION FIX: Only active words are selectable when paused
+                                        const isSelectable = active && !isPlaying;
 
                                         return (
                                             <React.Fragment key={wIdx}>
@@ -370,13 +488,17 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                                                     data-word-idx={wIdx}
                                                     style={{ 
                                                         display: 'inline', 
-                                                        pointerEvents: isPlaying ? 'none' : 'auto',
-                                                        userSelect: isPlaying ? 'none' : 'text'
+                                                        pointerEvents: isSelectable ? 'auto' : 'none',
+                                                        userSelect: isSelectable ? 'text' : 'none',
+                                                        WebkitUserSelect: isSelectable ? 'text' : 'none'
                                                     }}
                                                 >
                                                     {word.chars.map(c => {
                                                         const color = charOverrides[c.id] || (active ? lineSettings[currentLineIndex]?.color : undefined) || '#ffffff';
                                                         const isSelected = currentSelectionCharIds.includes(c.id);
+                                                        const textColor = isSelected && !selectionHasUniformOverride ? '#000' : (active ? color : '#3d3d3d');
+                                                        const bgColor = isSelected && !selectionHasUniformOverride ? '#fff' : (isSelected ? 'rgba(255, 255, 255, 0.16)' : 'transparent');
+                                                        
                                                         return (
                                                             <span 
                                                                 key={c.id} 
@@ -386,10 +508,10 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                                                                 style={{
                                                                     display: 'inline',
                                                                     fontWeight: 500,
-                                                                    transition: 'color 0.1s ease, text-shadow 0.1s ease',
-                                                                    color: active ? color : '#a6a6a6',
-                                                                    textShadow: active ? `0 0 1px ${color}` : '',
-                                                                    backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
+                                                                    transition: 'color 0.1s ease, text-shadow 0.1s ease, background-color 0.1s ease',
+                                                                    color: textColor,
+                                                                    textShadow: active && !isSelected ? `0 0 1px ${color}` : '',
+                                                                    backgroundColor: bgColor,
                                                                     borderRadius: isSelected ? 2 : 0
                                                                 }}
                                                             >
@@ -397,20 +519,29 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                                                             </span>
                                                         );
                                                     })}
-                                                    <span 
-                                                        className={`char space ${currentSelectionCharIds.includes(word.spaceId) ? 'edit-active' : ''}`}
-                                                        data-char-id={word.spaceId}
-                                                        data-override-color={charOverrides[word.spaceId]}
-                                                        style={{
-                                                            display: 'inline', fontWeight: 500, transition: 'color 0.1s ease, text-shadow 0.1s ease',
-                                                            color: active ? (charOverrides[word.spaceId] || lineSettings[currentLineIndex]?.color || '#ffffff') : '#a6a6a6',
-                                                            textShadow: active ? `0 0 1px ${charOverrides[word.spaceId] || lineSettings[currentLineIndex]?.color || '#ffffff'}` : '',
-                                                            backgroundColor: currentSelectionCharIds.includes(word.spaceId) ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
-                                                            borderRadius: currentSelectionCharIds.includes(word.spaceId) ? 2 : 0
-                                                        }}
-                                                    >
-                                                        {' '}
-                                                    </span>
+                                                    {(() => {
+                                                        const spaceIsSelected = currentSelectionCharIds.includes(word.spaceId);
+                                                        const spaceColor = charOverrides[word.spaceId] || (active ? lineSettings[currentLineIndex]?.color : undefined) || '#ffffff';
+                                                        const spaceTextColor = spaceIsSelected && !selectionHasUniformOverride ? '#000' : (active ? spaceColor : '#3d3d3d');
+                                                        const spaceBgColor = spaceIsSelected && !selectionHasUniformOverride ? '#fff' : (spaceIsSelected ? 'rgba(255, 255, 255, 0.16)' : 'transparent');
+                                                        
+                                                        return (
+                                                            <span 
+                                                                className={`char space ${spaceIsSelected ? 'edit-active' : ''}`}
+                                                                data-char-id={word.spaceId}
+                                                                data-override-color={charOverrides[word.spaceId]}
+                                                                style={{
+                                                                    display: 'inline', fontWeight: 500, transition: 'color 0.1s ease, text-shadow 0.1s ease, background-color 0.1s ease',
+                                                                    color: spaceTextColor,
+                                                                    textShadow: active && !spaceIsSelected ? `0 0 1px ${spaceColor}` : '',
+                                                                    backgroundColor: spaceBgColor,
+                                                                    borderRadius: spaceIsSelected ? 2 : 0
+                                                                }}
+                                                            >
+                                                                {' '}
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </span>
                                                 {word.isLastInSeg && wIdx !== renderedWords.length - 1 && <div style={{ flexBasis: '100%', height: 0 }}></div>}
                                             </React.Fragment>
@@ -421,15 +552,75 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                         </div>
                     </div>
                 </div>
-                <button 
-                    className="capcut-play-btn" 
-                    id="play-pause-btn" 
-                    onClick={togglePlayback}
-                >
-                    <svg viewBox="0 0 24 24">
-                        {isPlaying ? <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> : <path d="M8 5v14l11-7z" />}
-                    </svg>
-                </button>
+            </div>
+
+            {/* Bottom Docked Controller (Hidden automatically by browser in true fullscreen) */}
+            <div 
+                className="preview-controls" 
+                style={{ 
+                    width: '100%', 
+                    height: 48, 
+                    background: '#0a0a0a', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between', 
+                    padding: '0 16px',
+                    boxSizing: 'border-box', 
+                    borderTop: '1px solid #1a1a1a',
+                    zIndex: 10
+                }}
+            >
+                <div style={{ fontSize: 12, color: '#a0a0a0', fontFamily: 'monospace', display: 'flex', gap: 4, minWidth: 100 }}>
+                    <span style={{ color: '#ffffff' }}>{currentTimeDisplay}</span>
+                    <span style={{ color: '#444' }}>|</span>
+                    <span>{totalTimeDisplay}</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <button onClick={skipPrevLine} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex' }} title="Previous Line">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                        </svg>
+                    </button>
+
+                    <button onClick={togglePlayback} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex' }} title={isPlaying ? "Pause" : "Play"}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            {isPlaying ? <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> : <path d="M8 5v14l11-7z" />}
+                        </svg>
+                    </button>
+
+                    <button onClick={skipNextLine} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex' }} title="Next Line">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M14.5 12L6 6v12zm3.5-6h2v12h-2z"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 100, justifyContent: 'flex-end' }}>
+                    <button 
+                        onClick={() => setIsLooping(!isLooping)} 
+                        style={{ background: 'none', border: 'none', color: isLooping ? 'var(--accent)' : '#666', cursor: 'pointer', padding: 4, display: 'flex', transition: 'color 0.2s' }}
+                        title="Toggle Loop Sequence"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
+                        </svg>
+                    </button>
+
+                    <button 
+                        onClick={toggleFullscreen} 
+                        style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex' }}
+                        title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            {isFullscreen ? (
+                                <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
+                            ) : (
+                                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                            )}
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
     );
