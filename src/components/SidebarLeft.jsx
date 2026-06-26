@@ -1,6 +1,6 @@
 import React, { useContext, useState } from 'react';
-import { EditorContext } from '../../context/EditorContext';
-import { exportVideo } from '../../utils/exportEngine';
+import { EditorContext } from '../context/EditorContext';
+import { exportVideo } from '../utils/exportEngine';
 
 export const SidebarLeft = ({ scrollBox, charsData }) => {
     const { 

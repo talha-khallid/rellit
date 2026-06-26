@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 'react';
-import { EditorContext } from '../../context/EditorContext';
+import { EditorContext } from '../context/EditorContext';
 
 export const Preview = ({ setScrollBox, setCharsData }) => {
     const { 

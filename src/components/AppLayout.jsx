@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { SidebarLeft } from '../sidebar-left/SidebarLeft';
-import { SidebarRight } from '../sidebar-right/SidebarRight';
-import { Preview } from '../preview/Preview';
-import { Timeline } from '../timeline/Timeline';
+import { SidebarLeft } from './SidebarLeft';
+import { SidebarRight } from './SidebarRight';
+import { Preview } from './Preview';
+import { Timeline } from './Timeline';
 
 export const AppLayout = () => {
     // We lift these two state variables here because they are needed by the export engine,

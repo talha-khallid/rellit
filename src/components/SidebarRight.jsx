@@ -1,6 +1,6 @@
 import React, { useContext, useRef, useState, useEffect } from 'react';
-import { EditorContext } from '../../context/EditorContext';
-import { hexToHsv, hsvToHex } from '../../utils/colorUtils';
+import { EditorContext } from '../context/EditorContext';
+import { hexToHsv, hsvToHex } from '../utils/colorUtils';
 
 const CustomColorPicker = ({ initialHex, onChange, disabled }) => {
     const [h, setH] = useState(0);

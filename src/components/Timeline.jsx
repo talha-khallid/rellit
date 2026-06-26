@@ -1,5 +1,5 @@
 import React, { useContext, useRef, useState, useEffect } from 'react';
-import { EditorContext } from '../../context/EditorContext';
+import { EditorContext } from '../context/EditorContext';
 
 export const Timeline = () => {
     const { 
