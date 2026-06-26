@@ -28,6 +28,11 @@ export const EditorProvider = ({ children }) => {
     const [visualLines, setVisualLines] = useState([]);
     const [lineSettings, setLineSettings] = useState({});
     const [charOverrides, setCharOverrides] = useState({});
+    const [projectName, setProjectName] = useState("Untitled Project");
+    
+    // History
+    const [past, setPast] = useState([]);
+    const [future, setFuture] = useState([]);
     
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentLineIndex, setCurrentLineIndex] = useState(0);
@@ -139,6 +144,49 @@ export const EditorProvider = ({ children }) => {
         if (!isPlaying) stopAudio();
     }, [isPlaying, stopAudio]);
 
+    const saveHistoryState = useCallback(() => {
+        setPast(p => [...p, {
+            segments: JSON.stringify(segments),
+            lineSettings: JSON.stringify(lineSettings),
+            charOverrides: JSON.stringify(charOverrides)
+        }].slice(-50));
+        setFuture([]);
+    }, [segments, lineSettings, charOverrides]);
+
+    const undo = useCallback(() => {
+        if (past.length === 0) return;
+        const previous = past[past.length - 1];
+        const newPast = past.slice(0, past.length - 1);
+        
+        setFuture(f => [{
+            segments: JSON.stringify(segments),
+            lineSettings: JSON.stringify(lineSettings),
+            charOverrides: JSON.stringify(charOverrides)
+        }, ...f]);
+        
+        setPast(newPast);
+        setSegments(JSON.parse(previous.segments));
+        setLineSettings(JSON.parse(previous.lineSettings));
+        setCharOverrides(JSON.parse(previous.charOverrides));
+    }, [past, segments, lineSettings, charOverrides]);
+
+    const redo = useCallback(() => {
+        if (future.length === 0) return;
+        const next = future[0];
+        const newFuture = future.slice(1);
+
+        setPast(p => [...p, {
+            segments: JSON.stringify(segments),
+            lineSettings: JSON.stringify(lineSettings),
+            charOverrides: JSON.stringify(charOverrides)
+        }]);
+
+        setFuture(newFuture);
+        setSegments(JSON.parse(next.segments));
+        setLineSettings(JSON.parse(next.lineSettings));
+        setCharOverrides(JSON.parse(next.charOverrides));
+    }, [future, segments, lineSettings, charOverrides]);
+
     const value = {
         segments, setSegments,
         visualLines, setVisualLines,
@@ -152,7 +200,11 @@ export const EditorProvider = ({ children }) => {
         timelineScale, setTimelineScale,
         updateLineSettings, stopAudio,
         enforceSegmentAudioConstraints,
-        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef
+        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef,
+        projectName, setProjectName,
+        saveHistoryState, undo, redo,
+        canUndo: past.length > 0,
+        canRedo: future.length > 0
     };
 
     return (

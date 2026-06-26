@@ -3,6 +3,7 @@ import { SidebarLeft } from './SidebarLeft';
 import { SidebarRight } from './SidebarRight';
 import { Preview } from './Preview';
 import { Timeline } from './Timeline';
+import { TopBar } from './TopBar';
 
 export const AppLayout = () => {
     // We lift these two state variables here because they are needed by the export engine,
@@ -12,6 +13,7 @@ export const AppLayout = () => {
 
     return (
         <div className="app-container">
+            <TopBar scrollBox={scrollBox} charsData={charsData} />
             <div className="main-workspace">
                 <SidebarLeft scrollBox={scrollBox} charsData={charsData} />
                 <Preview setScrollBox={setScrollBox} setCharsData={setCharsData} />
