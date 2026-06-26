@@ -82,7 +82,7 @@ export const SidebarRight = () => {
         visualLines, lineSettings, updateLineSettings,
         isPlaying, currentLineIndex, 
         currentSelectionCharIds, setCurrentSelectionCharIds,
-        charOverrides, setCharOverrides, saveHistoryState
+        charOverrides, setCharOverrides
     } = useContext(EditorContext);
 
     const hasSelection = currentSelectionCharIds.length > 0;
@@ -97,7 +97,6 @@ export const SidebarRight = () => {
         const firstCharColor = charOverrides[firstCharId] || lineSettings[currentLineIndex]?.color || '#ffffff';
 
         const updateSelectionColor = (color) => {
-            saveHistoryState();
             const newOverrides = { ...charOverrides };
             currentSelectionCharIds.forEach(id => {
                 newOverrides[id] = color;
@@ -106,7 +105,6 @@ export const SidebarRight = () => {
         };
 
         const clearSelectionOverrides = () => {
-            saveHistoryState();
             const newOverrides = { ...charOverrides };
             currentSelectionCharIds.forEach(id => {
                 delete newOverrides[id];
@@ -151,14 +149,12 @@ export const SidebarRight = () => {
     const currentDur = lineSettings[currentLineIndex]?.duration || 0.1;
 
     const updateSegmentText = (newText) => {
-        saveHistoryState();
         const newSegments = [...segments];
         newSegments[segIndex].text = newText;
         setSegments(newSegments);
     };
 
     const updateLineDuration = (val) => {
-        saveHistoryState();
         let newDur = parseFloat(val) || 0.1;
         if (newDur < 0.1) newDur = 0.1;
 
@@ -194,7 +190,6 @@ export const SidebarRight = () => {
     };
 
     const updateLineColor = (val) => {
-        saveHistoryState();
         const newSettings = { ...lineSettings };
         if (!newSettings[currentLineIndex]) newSettings[currentLineIndex] = {};
         newSettings[currentLineIndex].color = val;

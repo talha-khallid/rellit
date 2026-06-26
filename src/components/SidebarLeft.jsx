@@ -8,14 +8,30 @@ export const SidebarLeft = ({ scrollBox, charsData }) => {
         visualLines, lineSettings, 
         isPlaying, togglePlayback,
         setCurrentLineIndex, setLineSettings,
-        setCharOverrides, saveHistoryState
+        setCharOverrides
     } = useContext(EditorContext);
+
+    const [exportFps, setExportFps] = useState(60);
+    const [exporting, setExporting] = useState(false);
+    const [progress, setProgress] = useState('');
 
     const [newText, setNewText] = useState('');
     const [newDuration, setNewDuration] = useState(5.0);
     const [newAudioFile, setNewAudioFile] = useState(null);
 
+    const handleExport = async () => {
+        if (isPlaying) togglePlayback();
+        setExporting(true);
+        setProgress('Preparing...');
 
+        await exportVideo({
+            segments, visualLines, lineSettings, charsData, 
+            fpsInput: exportFps, scrollBox,
+            setProgress,
+            onComplete: () => { setExporting(false); setTimeout(() => setProgress(''), 3000); },
+            onError: () => { setExporting(false); }
+        });
+    };
 
     const handleAddSegment = async () => {
         if (!newText.trim()) return;
@@ -44,14 +60,11 @@ export const SidebarLeft = ({ scrollBox, charsData }) => {
             audioDuration: segAudioDuration
         }]);
 
-        saveHistoryState();
-
         setNewText('');
         setNewAudioFile(null);
     };
 
     const handleRemoveSegment = (index) => {
-        saveHistoryState();
         const newSegments = [...segments];
         newSegments.splice(index, 1);
         setSegments(newSegments);
@@ -68,8 +81,33 @@ export const SidebarLeft = ({ scrollBox, charsData }) => {
         }
     };
 
+    return (
         <div className="sidebar">
             <h2>Segments</h2>
+            
+            <div className="export-section">
+                <label style={{ marginBottom: 12, color: '#fff', fontSize: 12 }}>Export to MP4</label>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 15, alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>FPS:</span>
+                    <input 
+                        type="number" 
+                        min="20" max="60" 
+                        value={exportFps} 
+                        onChange={e => setExportFps(e.target.value)}
+                        style={{ marginBottom: 0, padding: 8, width: 80 }} 
+                        disabled={exporting}
+                    />
+                </div>
+                <button 
+                    className="primary-btn" 
+                    onClick={handleExport} 
+                    disabled={exporting}
+                    style={{ opacity: exporting ? 0.5 : 1 }}
+                >
+                    {exporting ? 'Exporting...' : 'Export Video'}
+                </button>
+                {progress && <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 15, textTransform: 'uppercase', letterSpacing: 1 }}>{progress}</div>}
+            </div>
 
             <div id="segments-list">
                 {segments.map((seg, i) => (

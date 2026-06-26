@@ -35,15 +35,6 @@ export const EditorProvider = ({ children }) => {
     const [globalAudioObj, setGlobalAudioObj] = useState(null);
     const [currentlyPlayingSegIdx, setCurrentlyPlayingSegIdx] = useState(-1);
 
-    // History for Undo/Redo
-    const [past, setPast] = useState([]);
-    const [future, setFuture] = useState([]);
-
-    // Export State
-    const [exportFps, setExportFps] = useState(60);
-    const [exporting, setExporting] = useState(false);
-    const [exportProgress, setExportProgress] = useState('');
-
     const currentLineStartSysTimeRef = useRef(0);
     const currentLineStartTimeSecondsRef = useRef(0);
 
@@ -148,36 +139,6 @@ export const EditorProvider = ({ children }) => {
         if (!isPlaying) stopAudio();
     }, [isPlaying, stopAudio]);
 
-    // Undo / Redo Actions
-    const saveHistoryState = useCallback(() => {
-        setPast(p => [...p, { segments, lineSettings, charOverrides }]);
-        setFuture([]);
-    }, [segments, lineSettings, charOverrides]);
-
-    const undo = useCallback(() => {
-        if (past.length === 0) return;
-        const previous = past[past.length - 1];
-        const newPast = past.slice(0, past.length - 1);
-        
-        setFuture([{ segments, lineSettings, charOverrides }, ...future]);
-        setSegments(previous.segments);
-        setLineSettings(previous.lineSettings);
-        setCharOverrides(previous.charOverrides);
-        setPast(newPast);
-    }, [past, future, segments, lineSettings, charOverrides]);
-
-    const redo = useCallback(() => {
-        if (future.length === 0) return;
-        const next = future[0];
-        const newFuture = future.slice(1);
-        
-        setPast([...past, { segments, lineSettings, charOverrides }]);
-        setSegments(next.segments);
-        setLineSettings(next.lineSettings);
-        setCharOverrides(next.charOverrides);
-        setFuture(newFuture);
-    }, [past, future, segments, lineSettings, charOverrides]);
-
     const value = {
         segments, setSegments,
         visualLines, setVisualLines,
@@ -191,9 +152,7 @@ export const EditorProvider = ({ children }) => {
         timelineScale, setTimelineScale,
         updateLineSettings, stopAudio,
         enforceSegmentAudioConstraints,
-        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef,
-        past, future, saveHistoryState, undo, redo,
-        exportFps, setExportFps, exporting, setExporting, exportProgress, setExportProgress
+        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef
     };
 
     return (
