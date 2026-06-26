@@ -101,7 +101,8 @@ export async function exportVideo({
 
         for (let frame = 0; frame < totalFrames; frame++) {
             if (frame % 5 === 0) {
-                setProgress(`Rendering Frame ${frame + 1} / ${totalFrames}`);
+                const percent = Math.round((frame / totalFrames) * 100);
+                setProgress(`Rendering Frame ${frame + 1} / ${totalFrames}`, percent);
                 await new Promise(r => setTimeout(r, 0));
             }
 
@@ -185,7 +186,7 @@ export async function exportVideo({
         }
 
         if (audioEncoder) {
-            setProgress("Encoding Audio...");
+            setProgress("Encoding Audio...", 100);
             await new Promise(r => setTimeout(r, 0));
 
             const chunkFrames = 4096;
@@ -224,7 +225,7 @@ export async function exportVideo({
             await audioEncoder.flush();
         }
 
-        setProgress("Multiplexing MP4...");
+        setProgress("Multiplexing MP4...", 100);
         await videoEncoder.flush();
         muxer.finalize();
 
@@ -238,11 +239,11 @@ export async function exportVideo({
         a.click();
         URL.revokeObjectURL(url);
 
-        setProgress("Export Complete!");
+        setProgress("Export Complete!", 100);
         if (onComplete) onComplete();
     } catch (err) {
         console.error(err);
-        setProgress("Error: " + err.message);
+        setProgress("Error: " + err.message, 0);
         if (onError) onError(err);
     }
 }

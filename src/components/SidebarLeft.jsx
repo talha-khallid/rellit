@@ -7,7 +7,7 @@ export const SidebarLeft = ({ scrollBox, charsData }) => {
         visualLines, lineSettings, 
         isPlaying, togglePlayback,
         setCurrentLineIndex, setLineSettings,
-        setCharOverrides, saveHistoryState
+        setCharOverrides
     } = useContext(EditorContext);
 
     const [newText, setNewText] = useState('');
@@ -16,7 +16,6 @@ export const SidebarLeft = ({ scrollBox, charsData }) => {
 
     const handleAddSegment = async () => {
         if (!newText.trim()) return;
-        saveHistoryState();
         
         let segAudioBuffer = null;
         let segAudioDuration = null;
@@ -47,7 +46,6 @@ export const SidebarLeft = ({ scrollBox, charsData }) => {
     };
 
     const handleRemoveSegment = (index) => {
-        saveHistoryState();
         const newSegments = [...segments];
         newSegments.splice(index, 1);
         setSegments(newSegments);
@@ -64,6 +62,7 @@ export const SidebarLeft = ({ scrollBox, charsData }) => {
         }
     };
 
+    return (
         <div className="sidebar">
             <h2>Segments</h2>
 

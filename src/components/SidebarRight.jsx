@@ -82,7 +82,7 @@ export const SidebarRight = () => {
         visualLines, lineSettings, updateLineSettings,
         isPlaying, currentLineIndex, 
         currentSelectionCharIds, setCurrentSelectionCharIds,
-        charOverrides, setCharOverrides, saveHistoryState
+        charOverrides, setCharOverrides
     } = useContext(EditorContext);
 
     const hasSelection = currentSelectionCharIds.length > 0;
@@ -97,7 +97,6 @@ export const SidebarRight = () => {
         const firstCharColor = charOverrides[firstCharId] || lineSettings[currentLineIndex]?.color || '#ffffff';
 
         const updateSelectionColor = (color) => {
-            saveHistoryState();
             const newOverrides = { ...charOverrides };
             currentSelectionCharIds.forEach(id => {
                 newOverrides[id] = color;
