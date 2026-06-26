@@ -46,15 +46,13 @@ export async function exportVideo({
             fastStart: 'in-memory'
         };
 
-        let audioCtx = null;
         const segmentAudioData = {};
         let audioEncoder = null;
 
         if (hasAnyAudio) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: EXPORT_SAMPLE_RATE });
             for (let i = 0; i < segments.length; i++) {
                 if (segments[i].audioBuffer) {
-                    segmentAudioData[i] = await audioCtx.decodeAudioData(segments[i].audioBuffer.slice(0));
+                    segmentAudioData[i] = segments[i].audioBuffer;
                 }
             }
             muxerOptions.audio = { codec: muxerAudioCodec, sampleRate: EXPORT_SAMPLE_RATE, numberOfChannels: 2 };
