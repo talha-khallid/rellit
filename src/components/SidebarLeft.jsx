@@ -196,7 +196,8 @@ export const SidebarLeft = () => {
                                     className="duration-input"
                                     value={newDuration.includes('s') ? newDuration : newDuration + 's'}
                                     onChange={e => setNewDuration(e.target.value.replace('s', ''))}
-                                    disabled={!!newAudioFile} // Lock if audio is uploaded
+                                    disabled={!!newAudioFile}
+                                    style={{maxWidth: '50px'}}
                                 />
                             </div>
                             
