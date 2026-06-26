@@ -1,0 +1,361 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+    --bg-main: #000000;
+    --bg-sidebar: #0f0f0f;
+    --bg-input: #161616;
+    --text-main: #e8e8e8;
+    --text-muted: #666666;
+    --border: #1e1e1e;
+    --accent: #2b6aed;
+    --accent-hover: #3b7afc;
+    --danger: #ef4444;
+    --track-text: #e05a10;
+    --track-audio: #1a44b8;
+}
+
+/* --- Clean Scrollbars --- */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #2b2b2b;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #444;
+}
+
+body, html, #root {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--bg-main);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-main);
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+input, textarea {
+    user-select: auto;
+    -webkit-user-select: auto;
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.main-workspace {
+    display: flex;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+}
+
+.sidebar {
+    width: 380px;
+    min-width: 280px;
+    max-width: 50vw;
+    flex-shrink: 0; 
+    background-color: var(--bg-sidebar);
+    padding: 30px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    resize: horizontal;
+}
+
+.sidebar.right-sidebar {
+    border-right: none;
+    border-left: 1px solid var(--border);
+    direction: rtl;
+    resize: horizontal;
+}
+
+.sidebar.right-sidebar > * {
+    direction: ltr;
+    text-align: left;
+}
+
+.sidebar h2 {
+    margin-top: 0;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 30px;
+    opacity: 0.8;
+}
+
+.center-preview {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--bg-main);
+    min-width: 0;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+}
+
+input[type="text"], input[type="number"], textarea {
+    width: 100%;
+    background: var(--bg-input);
+    color: #fff;
+    border: 1px solid var(--border);
+    padding: 12px;
+    border-radius: 6px;
+    box-sizing: border-box;
+    margin-bottom: 20px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+input:focus:not(:disabled), textarea:focus:not(:disabled) {
+    border-color: #3a3b3c;
+    background: #1e1e1e;
+}
+
+textarea {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.5;
+}
+
+button.primary-btn {
+    cursor: pointer;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 500;
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    width: 100%;
+    transition: background 0.2s;
+    font-size: 13px;
+}
+button.primary-btn:hover { background: var(--accent-hover); }
+button.primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+button.btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    font-weight: 500;
+    margin-top: 10px;
+    cursor: pointer;
+    padding: 12px;
+    width: 100%;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+button.btn-ghost:hover:not(:disabled) { border-color: #444; color: #fff; background: #161616; }
+button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* --- CapCut Pro Timeline Container Styles --- */
+.timeline-container {
+    height: 240px;
+    background: #090909;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    z-index: 10;
+}
+.timeline-header {
+    padding: 8px 20px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #8c8c8c;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #0f0f0f;
+}
+.timeline-scroll-area {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    position: relative;
+    padding: 30px 20px 20px 20px; 
+}
+.timeline-content {
+    height: 100%;
+    position: relative;
+    min-width: 100%;
+}
+.time-ruler {
+    position: absolute;
+    top: -20px;
+    left: 0;
+    height: 20px;
+    width: 100%;
+    border-bottom: 1px solid #222;
+}
+.ruler-tick {
+    position: absolute;
+    bottom: 0;
+    height: 6px;
+    width: 1px;
+    background: #333;
+}
+.ruler-tick span {
+    position: absolute;
+    top: -14px;
+    left: 4px;
+    font-size: 9px;
+    color: #555;
+    font-family: monospace;
+}
+.track {
+    height: 36px;
+    margin-bottom: 12px;
+    position: relative;
+    background: rgba(255,255,255,0.01);
+    border-radius: 4px;
+    border: 1px dashed rgba(255,255,255,0.03);
+}
+.track::before {
+    content: attr(data-label);
+    position: sticky;
+    left: 10px;
+    top: 0;
+    line-height: 36px;
+    font-size: 10px;
+    color: #444;
+    z-index: 5;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    pointer-events: none;
+    font-weight: 600;
+}
+.timeline-block {
+    position: absolute;
+    height: 100%;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    box-sizing: border-box;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    z-index: 10;
+    transition: filter 0.2s;
+    font-weight: 500;
+}
+.audio-block {
+    background: var(--track-audio);
+    color: #dbeafe;
+    pointer-events: none; 
+    border: 1px solid rgba(0,0,0,0.15);
+}
+.text-block {
+    background: var(--track-text);
+    color: #fff;
+    cursor: pointer;
+    border: 1px solid rgba(0,0,0,0.15);
+}
+.text-block:hover { filter: brightness(1.08); }
+.text-block.active {
+    filter: brightness(1.15);
+    z-index: 15;
+    box-shadow: 0 0 0 2px #ffffff;
+}
+.resize-handle-right {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 10px;
+    height: 100%;
+    cursor: col-resize;
+    background: rgba(0,0,0,0.08);
+    border-left: 1px solid rgba(255,255,255,0.15);
+}
+.text-block.active .resize-handle-right { background: rgba(255,255,255,0.15); }
+
+/* --- CapCut Precision Playhead Style --- */
+.playhead {
+    position: absolute;
+    top: -20px;
+    bottom: -10px;
+    width: 1px;
+    background: #ffffff;
+    z-index: 100;
+    pointer-events: auto;
+    cursor: ew-resize;
+}
+.playhead-cap {
+    position: absolute;
+    top: 0;
+    left: -4px;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #ffffff;
+}
+.playhead-hitbox {
+    position: absolute;
+    left: -15px;
+    right: -15px;
+    top: 0;
+    bottom: 0;
+    cursor: ew-resize;
+}
+
+/* --- CapCut Pro Subtle Playback button --- */
+.capcut-play-btn {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+.capcut-play-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    transform: scale(1.04);
+}
+.capcut-play-btn svg {
+    fill: #ffffff;
+    width: 16px;
+    height: 16px;
+}
