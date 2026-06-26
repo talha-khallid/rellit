@@ -12,7 +12,8 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         currentlyPlayingSegIdx, setCurrentlyPlayingSegIdx,
         charOverrides,
         currentLineStartSysTimeRef, currentLineStartTimeSecondsRef,
-        timelineScale
+        timelineScale,
+        getAudioCtx, AudioBufferPlayer
     } = useContext(EditorContext);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -72,7 +73,13 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
     }, [segments]);
 
     useLayoutEffect(() => {
-        if (!trackRef.current || renderedWords.length === 0) return;
+        if (!trackRef.current) return;
+        
+        if (renderedWords.length === 0) {
+            setVisualLines([]);
+            updateLineSettings([], lineSettings, segments);
+            return;
+        }
         
         const calculateVisualLines = () => {
             if (!trackRef.current) return;
@@ -192,8 +199,9 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         let targetLineIdx = currentLineIndex;
         if (targetLineIdx >= visualLines.length) {
             if (isLooping) {
-                targetLineIdx = 0;
                 setCurrentLineIndex(0);
+                setCurrentlyPlayingSegIdx(-1);
+                return;
             } else {
                 togglePlayback();
                 return;
@@ -217,11 +225,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                 globalAudioObj.pause();
                 setGlobalAudioObj(null);
             }
-            if (seg.audioBuffer) {
-                const blob = new Blob([seg.audioBuffer]);
-                const url = URL.createObjectURL(blob);
-                const audio = new Audio(url);
-                
+            if (seg && seg.audioBuffer) {
                 let offsetTime = 0;
                 for(let i=0; i<targetLineIdx; i++) {
                     if (visualLines[i][0].segIndex === currentSegIdx) {
@@ -229,9 +233,10 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                     }
                 }
                 
-                audio.currentTime = offsetTime;
-                audio.play();
-                setGlobalAudioObj(audio);
+                const audioCtx = getAudioCtx();
+                const player = new AudioBufferPlayer(audioCtx, seg.audioBuffer);
+                player.play(offsetTime);
+                setGlobalAudioObj(player);
             }
         }
 

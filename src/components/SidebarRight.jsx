@@ -149,6 +149,7 @@ export const SidebarRight = () => {
     const currentDur = lineSettings[currentLineIndex]?.duration || 0.1;
 
     const updateSegmentText = (newText) => {
+        if (!segments[segIndex]) return;
         const newSegments = [...segments];
         newSegments[segIndex].text = newText;
         setSegments(newSegments);
@@ -160,6 +161,7 @@ export const SidebarRight = () => {
 
         const newSettings = { ...lineSettings };
         const seg = segments[segIndex];
+        if (!seg) return;
 
         if (seg.audioDuration !== null && seg.audioDuration !== undefined) {
             const segmentLineIndices = [];

@@ -80,7 +80,7 @@ export const Timeline = () => {
             currentSegIdx = segIdx;
             audioBlockStart = lineBlocks[i].start;
             audioBlockDur = dur;
-            hasAudio = !!seg.audioBuffer;
+            hasAudio = seg ? !!seg.audioBuffer : false;
         } else {
             audioBlockDur += dur;
         }
@@ -122,7 +122,7 @@ export const Timeline = () => {
                 const segIdx = visualLines[resizeLineIdx][0].segIndex;
                 const seg = segments[segIdx];
         
-                if (seg.audioDuration !== null && seg.audioDuration !== undefined) {
+                if (seg && seg.audioDuration !== null && seg.audioDuration !== undefined) {
                     const segmentLineIndices = [];
                     visualLines.forEach((line, idx) => { if (line[0].segIndex === segIdx) segmentLineIndices.push(idx); });
         

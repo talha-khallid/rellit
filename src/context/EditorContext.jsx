@@ -23,7 +23,45 @@ const initialSegments = [
     }
 ];
 
+export class AudioBufferPlayer {
+    constructor(audioCtx, audioBuffer) {
+        this.audioCtx = audioCtx;
+        this.audioBuffer = audioBuffer;
+        this.source = null;
+    }
+    play(offset = 0) {
+        if (this.source) {
+            try { this.source.stop(); } catch(e) {}
+        }
+        this.source = this.audioCtx.createBufferSource();
+        this.source.buffer = this.audioBuffer;
+        this.source.connect(this.audioCtx.destination);
+        const duration = this.audioBuffer.duration;
+        const safeOffset = Math.min(Math.max(0, offset), duration);
+        this.source.start(0, safeOffset);
+    }
+    pause() {
+        if (this.source) {
+            try { this.source.stop(); } catch(e) {}
+            this.source = null;
+        }
+    }
+    stop() {
+        this.pause();
+    }
+}
+
 export const EditorProvider = ({ children }) => {
+    const audioCtxRef = useRef(null);
+    const getAudioCtx = useCallback(() => {
+        if (!audioCtxRef.current) {
+            audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtxRef.current.state === 'suspended') {
+            audioCtxRef.current.resume();
+        }
+        return audioCtxRef.current;
+    }, []);
     const [segments, setSegments] = useState([]);
     const [visualLines, setVisualLines] = useState([]);
     const [lineSettings, setLineSettings] = useState({});
@@ -61,7 +99,7 @@ export const EditorProvider = ({ children }) => {
         for (let segIdxStr in segLines) {
             const segIdx = parseInt(segIdxStr);
             const seg = currentSegments[segIdx];
-            if (seg.audioDuration !== null && seg.audioDuration !== undefined) {
+            if (seg && seg.audioDuration !== null && seg.audioDuration !== undefined) {
                 const lines = segLines[segIdx];
                 let currentTotal = 0;
                 const durs = lines.map(lineIdx => {
@@ -152,7 +190,8 @@ export const EditorProvider = ({ children }) => {
         timelineScale, setTimelineScale,
         updateLineSettings, stopAudio,
         enforceSegmentAudioConstraints,
-        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef
+        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef,
+        getAudioCtx, AudioBufferPlayer
     };
 
     return (
