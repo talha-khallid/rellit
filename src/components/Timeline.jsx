@@ -8,7 +8,8 @@ export const Timeline = () => {
         currentLineIndex, setCurrentLineIndex,
         timelineScale, setTimelineScale,
         setCurrentSelectionCharIds,
-        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef
+        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef,
+        saveHistoryState
     } = useContext(EditorContext);
 
     const [isResizing, setIsResizing] = useState(false);
@@ -244,6 +245,7 @@ export const Timeline = () => {
                                 <div 
                                     className="resize-handle-right" 
                                     onMouseDown={(e) => {
+                                        saveHistoryState();
                                         setIsResizing(true);
                                         setResizeLineIdx(lb.index);
                                         setStartX(e.clientX);
