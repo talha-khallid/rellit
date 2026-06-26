@@ -6,7 +6,8 @@ export const Topbar = ({ scrollBox, charsData }) => {
     const { 
         segments, 
         visualLines, lineSettings, 
-        isPlaying, togglePlayback
+        isPlaying, togglePlayback,
+        videoBgColor
     } = useContext(EditorContext);
 
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -29,6 +30,7 @@ export const Topbar = ({ scrollBox, charsData }) => {
         await exportVideo({
             segments, visualLines, lineSettings, charsData, 
             fpsInput: exportFps, scrollBox,
+            videoBgColor,
             setProgress: (text, percent = 0) => {
                 setProgressText(text);
                 setProgressPercent(percent);

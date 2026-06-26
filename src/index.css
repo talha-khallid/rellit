@@ -905,3 +905,38 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
     cursor: not-allowed;
 }
 
+/* --- Sidebar Tab Navigation --- */
+.sidebar-tabs {
+    display: flex;
+    border-top: 1px solid var(--border);
+    background: #111111;
+    margin: 16px -24px -30px -24px;
+    padding: 0;
+    height: 40px;
+    z-index: 10;
+}
+.sidebar-tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+.sidebar-tab-btn:hover {
+    color: #fff;
+}
+.sidebar-tab-btn.active {
+    color: #fff;
+    border-bottom-color: var(--accent);
+    background: rgba(255,255,255,0.01);
+}
+

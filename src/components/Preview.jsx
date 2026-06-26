@@ -13,7 +13,8 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         charOverrides,
         currentLineStartSysTimeRef, currentLineStartTimeSecondsRef,
         timelineScale,
-        getAudioCtx, AudioBufferPlayer
+        getAudioCtx, AudioBufferPlayer,
+        videoBgColor, videoAlignPercent
     } = useContext(EditorContext);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -300,9 +301,9 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
 
         document.body.appendChild(screenEl);
 
-        screenEl.style.cssText = 'width: 1080px !important; height: 1920px !important; max-width: none !important; position: absolute !important; top: 0 !important; left: 0 !important; z-index: -1000 !important; transform: scale(1) !important; display: flex !important; alignItems: center !important; background-color: #050505 !important; border-radius: 0 !important;';
+        screenEl.style.cssText = `width: 1080px !important; height: 1920px !important; max-width: none !important; position: absolute !important; top: 0 !important; left: 0 !important; z-index: -1000 !important; transform: scale(1) !important; display: block !important; background-color: ${videoBgColor} !important; border-radius: 0 !important;`;
         if (wrapperEl) {
-            wrapperEl.style.cssText = 'width: 100% !important; padding-left: 54px !important; padding-right: 157px !important; box-sizing: border-box !important; font-size: 43.5px !important; line-height: 1.45 !important;';
+            wrapperEl.style.cssText = `position: absolute !important; top: ${videoAlignPercent}% !important; transform: translateY(-50%) !important; left: 0 !important; width: 100% !important; padding-left: 54px !important; padding-right: 157px !important; box-sizing: border-box !important; font-size: 43.5px !important; line-height: 1.45 !important;`;
         }
         
         const originalTrackTransform = trackEl.style.transform;
@@ -356,7 +357,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
             setTimeout(captureExportGeometry, 40);
         }
         // eslint-disable-next-line
-    }, [visualLines, charOverrides, lineSettings, screenScale]);
+    }, [visualLines, charOverrides, lineSettings, screenScale, videoBgColor, videoAlignPercent]);
 
     useEffect(() => {
         const handleSelection = () => {
@@ -452,13 +453,27 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                         id="mobile-screen" 
                         ref={screenRef}
                         style={{
-                            width: 1080, height: 1920, backgroundColor: '#050505',
-                            boxSizing: 'border-box', display: 'flex', alignItems: 'center',
+                            width: 1080, height: 1920, backgroundColor: videoBgColor,
+                            boxSizing: 'border-box', display: 'block',
                             position: 'absolute', top: '50%', left: '50%', transformOrigin: 'top left',
                             transform: `scale(${screenScale}) translate(-50%, -50%)`
                         }}
                     >
-                        <div className="caption-wrapper" style={{ width: '100%', paddingLeft: 54, paddingRight: 157, boxSizing: 'border-box', fontSize: 43.5, lineHeight: 1.45 }}>
+                        <div 
+                            className="caption-wrapper" 
+                            style={{ 
+                                position: 'absolute',
+                                top: `${videoAlignPercent}%`,
+                                transform: 'translateY(-50%)',
+                                left: 0,
+                                width: '100%', 
+                                paddingLeft: 54, 
+                                paddingRight: 157, 
+                                boxSizing: 'border-box', 
+                                fontSize: 43.5, 
+                                lineHeight: 1.45 
+                            }}
+                        >
                             <div 
                                 className="caption-scroll-container" 
                                 id="scroll-container" 

@@ -1,5 +1,6 @@
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
+import { CustomColorPicker } from './SidebarRight';
 
 // --- Dynamic Waveform Component ---
 const Waveform = ({ audioBuffer }) => {
@@ -58,9 +59,12 @@ export const SidebarLeft = () => {
         visualLines, 
         isPlaying, togglePlayback,
         setCurrentLineIndex,
-        setCurrentlyPlayingSegIdx
+        setCurrentlyPlayingSegIdx,
+        videoBgColor, setVideoBgColor,
+        videoAlignPercent, setVideoAlignPercent
     } = useContext(EditorContext);
 
+    const [activeTab, setActiveTab] = useState('media');
     const [newText, setNewText] = useState('');
     const [newDuration, setNewDuration] = useState('05');
     const [newAudioFile, setNewAudioFile] = useState(null);
@@ -160,85 +164,125 @@ export const SidebarLeft = () => {
     };
 
     return (
-        <div className="sidebar">
-            
-            {/* Input Form Area */}
-            <div>
-                <textarea 
-                    className="premium-textarea"
-                    placeholder="Enter text......" 
-                    value={newText}
-                    onChange={e => setNewText(e.target.value)}
-                ></textarea>
-                
-                <div className="upload-row">
-                    <div className="upload-btn" onClick={() => fileInputRef.current?.click()}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>
-                            {newAudioFile ? newAudioFile.name : 'Upload Audio'}
-                        </span>
-                        <span style={{ fontSize: 16, color: '#888' }}>↑</span>
-                        <input 
-                            type="file" 
-                            accept="audio/*" 
-                            ref={fileInputRef}
-                            style={{ display: 'none' }}
-                            onChange={handleMainAudioChange}
-                        />
-                    </div>
-                    <input 
-                        type="text" 
-                        className="duration-input"
-                        value={newDuration.includes('s') ? newDuration : newDuration + 's'}
-                        onChange={e => setNewDuration(e.target.value.replace('s', ''))}
-                        disabled={!!newAudioFile} // Lock if audio is uploaded
-                    />
-                </div>
-                
-                <button className="btn-primary" onClick={handleAddSegment}>
-                    Add Segment
-                </button>
-            </div>
-
-            {/* Segments List Area */}
-            <div id="segments-list">
-                {segments.map((seg, i) => {
-                    const uniqueInputId = `audio-upload-${i}`;
-                    return (
-                        <div key={i} className="segment-card">
-                            <div className="segment-box">
-                                {seg.text}
+        <div className="sidebar" style={{ display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                {activeTab === 'media' ? (
+                    <>
+                        {/* Input Form Area */}
+                        <div>
+                            <textarea 
+                                className="premium-textarea"
+                                placeholder="Enter text......" 
+                                value={newText}
+                                onChange={e => setNewText(e.target.value)}
+                            ></textarea>
+                            
+                            <div className="upload-row">
+                                <div className="upload-btn" onClick={() => fileInputRef.current?.click()}>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>
+                                        {newAudioFile ? newAudioFile.name : 'Upload Audio'}
+                                    </span>
+                                    <span style={{ fontSize: 16, color: '#888' }}>↑</span>
+                                    <input 
+                                        type="file" 
+                                        accept="audio/*" 
+                                        ref={fileInputRef}
+                                        style={{ display: 'none' }}
+                                        onChange={handleMainAudioChange}
+                                    />
+                                </div>
+                                <input 
+                                    type="text" 
+                                    className="duration-input"
+                                    value={newDuration.includes('s') ? newDuration : newDuration + 's'}
+                                    onChange={e => setNewDuration(e.target.value.replace('s', ''))}
+                                    disabled={!!newAudioFile} // Lock if audio is uploaded
+                                />
                             </div>
                             
-                            <div className="audio-box">
-                                {seg.audioBuffer ? (
-                                    <Waveform audioBuffer={seg.audioBuffer} />
-                                ) : (
-                                    <div 
-                                        style={{ color: '#888', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}
-                                        onClick={() => document.getElementById(uniqueInputId).click()}
-                                    >
-                                        Upload Audio <span style={{ fontSize: 14 }}>↑</span>
-                                        <input 
-                                            id={uniqueInputId}
-                                            type="file" 
-                                            accept="audio/*" 
-                                            style={{ display: 'none' }}
-                                            onChange={(e) => handleSegmentAudioChange(i, e)}
-                                        />
+                            <button className="btn-primary" onClick={handleAddSegment}>
+                                Add Segment
+                            </button>
+                        </div>
+
+                        {/* Segments List Area */}
+                        <div id="segments-list">
+                            {segments.map((seg, i) => {
+                                const uniqueInputId = `audio-upload-${i}`;
+                                return (
+                                    <div key={i} className="segment-card">
+                                        <div className="segment-box">
+                                            {seg.text}
+                                        </div>
+                                        
+                                        <div className="audio-box">
+                                            {seg.audioBuffer ? (
+                                                <Waveform audioBuffer={seg.audioBuffer} />
+                                            ) : (
+                                                <div 
+                                                    style={{ color: '#888', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}
+                                                    onClick={() => document.getElementById(uniqueInputId).click()}
+                                                >
+                                                    Upload Audio <span style={{ fontSize: 14 }}>↑</span>
+                                                    <input 
+                                                        id={uniqueInputId}
+                                                        type="file" 
+                                                        accept="audio/*" 
+                                                        style={{ display: 'none' }}
+                                                        onChange={(e) => handleSegmentAudioChange(i, e)}
+                                                    />
+                                                </div>
+                                            )}
+                                            <span style={{ fontSize: '13px', color: '#e0e0e0', marginLeft: '16px' }}>
+                                                {Math.round(seg.duration)}s
+                                            </span>
+                                        </div>
+
+                                        <div className="actions-row">
+                                            <button className="btn-action" onClick={() => editSegment(i)}>Edit</button>
+                                            <button className="btn-action" onClick={() => handleRemoveSegment(i)}>Delete</button>
+                                        </div>
                                     </div>
-                                )}
-                                <span style={{ fontSize: '13px', color: '#e0e0e0', marginLeft: '16px' }}>
-                                    {Math.round(seg.duration)}s
+                                );
+                            })}
+                        </div>
+                    </>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        <div>
+                            <span className="context-label" style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, display: 'block', fontWeight: 500 }}>Canvas Settings</span>
+                            <h3 className="context-title" style={{ fontSize: 20, fontWeight: 500, margin: '0 0 25px 0', color: '#fff' }}>Video Settings</h3>
+                        </div>
+
+                        <div className="prop-group">
+                            <label>Background Color</label>
+                            <CustomColorPicker initialHex={videoBgColor} onChange={setVideoBgColor} />
+                        </div>
+
+                        <div className="prop-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <label style={{ margin: 0 }}>Vertical Alignment</label>
+                                <span style={{ fontSize: 12, color: '#fff', fontFamily: 'monospace' }}>
+                                    {videoAlignPercent}% 
+                                    {videoAlignPercent === 50 ? ' (Center)' : videoAlignPercent < 40 ? ' (Top)' : videoAlignPercent > 60 ? ' (Bottom)' : ''}
                                 </span>
                             </div>
-
-                            <div className="actions-row">
-                                <button className="btn-action" onClick={() => editSegment(i)}>Edit</button>
-                                <button className="btn-action" onClick={() => handleRemoveSegment(i)}>Delete</button>
-                            </div>
+                            <input 
+                                type="range" 
+                                min="10" 
+                                max="90" 
+                                value={videoAlignPercent} 
+                                onChange={e => setVideoAlignPercent(parseInt(e.target.value))} 
+                                style={{ width: '100%', height: 4, cursor: 'pointer', margin: '8px 0' }} 
+                            />
                         </div>
-                    );
-                })}
+                    </div>
+                )}
+            </div>
+
+            <div className="sidebar-tabs">
+                <button className={`sidebar-tab-btn ${activeTab === 'media' ? 'active' : ''}`} onClick={() => setActiveTab('media')}>Media</button>
+                <button className={`sidebar-tab-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>Video Settings</button>
             </div>
         </div>
     );

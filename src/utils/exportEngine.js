@@ -10,7 +10,8 @@ export async function exportVideo({
     scrollBox,
     setProgress,
     onComplete,
-    onError
+    onError,
+    videoBgColor
 }) {
     const fps = isNaN(fpsInput) ? 60 : Math.max(20, Math.min(60, fpsInput));
 
@@ -94,6 +95,11 @@ export async function exportVideo({
         ctx.font = '500 43.5px Inter, -apple-system, BlinkMacSystemFont, Roboto, sans-serif';
         ctx.textBaseline = 'top';
 
+        const rgb = hexToRgb(videoBgColor || '#050505');
+        const bgRgba = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1)`;
+        const bgRgba75 = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.75)`;
+        const bgRgba0 = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`;
+
         let currentTimeMs = 0;
         const frameTimeMs = 1000 / fps;
 
@@ -139,7 +145,7 @@ export async function exportVideo({
 
             let colorProgress = Math.min(timeInLineMs / 100, 1.0);
 
-            ctx.fillStyle = '#050505';
+            ctx.fillStyle = videoBgColor || '#050505';
             ctx.fillRect(0, 0, 1080, 1920);
 
             for (let c of charsData) {
@@ -165,14 +171,14 @@ export async function exportVideo({
 
             ctx.shadowBlur = 0;
             const grad = ctx.createLinearGradient(0, scrollBox.y, 0, scrollBox.y + scrollBox.h);
-            grad.addColorStop(0, 'rgba(5, 5, 5, 1)'); grad.addColorStop(0.15, 'rgba(5, 5, 5, 0.75)');
-            grad.addColorStop(0.40, 'rgba(5, 5, 5, 0)'); grad.addColorStop(0.60, 'rgba(5, 5, 5, 0)');
-            grad.addColorStop(0.85, 'rgba(5, 5, 5, 0.75)'); grad.addColorStop(1.0, 'rgba(5, 5, 5, 1)');
+            grad.addColorStop(0, bgRgba); grad.addColorStop(0.15, bgRgba75);
+            grad.addColorStop(0.40, bgRgba0); grad.addColorStop(0.60, bgRgba0);
+            grad.addColorStop(0.85, bgRgba75); grad.addColorStop(1.0, bgRgba);
 
             ctx.fillStyle = grad;
             ctx.fillRect(0, scrollBox.y, 1080, scrollBox.h);
 
-            ctx.fillStyle = '#050505';
+            ctx.fillStyle = videoBgColor || '#050505';
             ctx.fillRect(0, 0, 1080, scrollBox.y);
             ctx.fillRect(0, scrollBox.y + scrollBox.h, 1080, 1920 - (scrollBox.y + scrollBox.h));
 

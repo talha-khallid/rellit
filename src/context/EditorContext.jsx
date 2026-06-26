@@ -79,6 +79,10 @@ export const EditorProvider = ({ children }) => {
     // Timeline scale
     const [timelineScale, setTimelineScale] = useState(70);
 
+    // Video Custom Settings
+    const [videoBgColor, setVideoBgColor] = useState('#050505');
+    const [videoAlignPercent, setVideoAlignPercent] = useState(50);
+
     // Sync from localStorage or default
     useEffect(() => {
         fetch('/captions.json')
@@ -191,7 +195,9 @@ export const EditorProvider = ({ children }) => {
         updateLineSettings, stopAudio,
         enforceSegmentAudioConstraints,
         currentLineStartSysTimeRef, currentLineStartTimeSecondsRef,
-        getAudioCtx, AudioBufferPlayer
+        getAudioCtx, AudioBufferPlayer,
+        videoBgColor, setVideoBgColor,
+        videoAlignPercent, setVideoAlignPercent
     };
 
     return (
