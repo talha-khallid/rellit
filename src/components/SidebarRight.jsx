@@ -44,7 +44,7 @@ const CustomColorPicker = ({ initialHex, onChange, disabled }) => {
     };
 
     return (
-        <div className="custom-color-picker" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', padding: 12, borderRadius: 6, marginBottom: 20, opacity: disabled ? 0.4 : 1, pointerEvents: disabled ? 'none' : 'auto' }}>
+        <div className={`custom-color-picker ${disabled ? 'disabled' : ''}`}>
             <div 
                 className="color-area" 
                 ref={areaRef}
@@ -58,19 +58,25 @@ const CustomColorPicker = ({ initialHex, onChange, disabled }) => {
                     document.addEventListener('mousemove', onMouseMove);
                     document.addEventListener('mouseup', onMouseUp);
                 }}
-                style={{ width: '100%', height: 140, position: 'relative', borderRadius: 4, cursor: 'crosshair', backgroundColor: `hsl(${h}, 100%, 50%)`, backgroundImage: 'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)', marginBottom: 15 }}
+                style={{ backgroundColor: `hsl(${h}, 100%, 50%)` }}
             >
-                <div className="color-dot" style={{ width: 14, height: 14, background: 'transparent', border: '2px solid white', borderRadius: '50%', position: 'absolute', transform: 'translate(-50%, -50%)', boxShadow: '0 0 4px rgba(0,0,0,0.6)', pointerEvents: 'none', left: `${s}%`, top: `${100 - v}%` }}></div>
+                <div className="color-dot" style={{ left: `${s}%`, top: `${100 - v}%` }}></div>
             </div>
-            <div style={{ marginTop: 15, marginBottom: 20 }}>
-                <input type="range" min="0" max="360" value={h} onChange={(e) => {
-                    const newH = parseFloat(e.target.value);
-                    setH(newH); emitColor(newH, s, v);
-                }} style={{ WebkitAppearance: 'none', width: '100%', height: 10, borderRadius: 5, background: 'linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)', outline: 'none', padding: 0, margin: 0 }} />
+            <div className="hue-slider-container">
+                <input 
+                    type="range" 
+                    min="0" max="360" 
+                    value={h} 
+                    onChange={(e) => {
+                        const newH = parseFloat(e.target.value);
+                        setH(newH); emitColor(newH, s, v);
+                    }} 
+                    className="hue-slider" 
+                />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
-                <div style={{ width: 32, height: 32, borderRadius: 6, backgroundColor: hsvToHex(h,s,v), border: '1px solid var(--border)', flexShrink: 0 }}></div>
-                <input type="text" value={hexInput} onChange={handleHexChange} style={{ background: '#111', border: '1px solid var(--border)', color: '#fff', padding: '8px 12px', borderRadius: 4, fontFamily: 'monospace', fontSize: 13, outline: 'none', width: '100%', textTransform: 'uppercase', boxSizing: 'border-box', margin: 0 }} />
+            <div className="color-input-row">
+                <div className="color-preview-box" style={{ backgroundColor: hsvToHex(h,s,v) }}></div>
+                <input type="text" value={hexInput} onChange={handleHexChange} className="color-text-input" />
             </div>
         </div>
     );

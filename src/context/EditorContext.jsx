@@ -169,8 +169,8 @@ export const EditorProvider = ({ children }) => {
         if (globalAudioObj) {
             globalAudioObj.pause();
             setGlobalAudioObj(null);
-            setCurrentlyPlayingSegIdx(-1);
         }
+        setCurrentlyPlayingSegIdx(-1);
     }, [globalAudioObj]);
 
     useEffect(() => {

@@ -57,7 +57,8 @@ export const SidebarLeft = () => {
         segments, setSegments, 
         visualLines, 
         isPlaying, togglePlayback,
-        setCurrentLineIndex
+        setCurrentLineIndex,
+        setCurrentlyPlayingSegIdx
     } = useContext(EditorContext);
 
     const [newText, setNewText] = useState('');
@@ -119,6 +120,7 @@ export const SidebarLeft = () => {
         updated[index].audioDuration = tempAudio.duration;
         updated[index].duration = tempAudio.duration;
         setSegments(updated);
+        setCurrentlyPlayingSegIdx(-1);
     };
 
     const handleAddSegment = () => {
