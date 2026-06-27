@@ -22,6 +22,9 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
     const [isLooping, setIsLooping] = useState(true);
     const [currentTimeDisplay, setCurrentTimeDisplay] = useState('00:00');
     const [totalTimeDisplay, setTotalTimeDisplay] = useState('00:00');
+    
+    // Track the active audio player inside the closure safely
+    const currentAudioRef = useRef(null);
 
     const trackRef = useRef(null);
     const scrollContainerRef = useRef(null);
@@ -175,6 +178,10 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         let frameId;
         
         if (!isPlaying || visualLines.length === 0) {
+            if (currentAudioRef.current) {
+                currentAudioRef.current.pause();
+                currentAudioRef.current = null;
+            }
             if (globalAudioObj) globalAudioObj.pause();
             setCurrentTimeDisplay(formatTime(currentTimeRef.current));
             setTotalTimeDisplay(formatTime(getTotalDuration()));
@@ -207,6 +214,10 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         if (currentSegIdx !== -1) {
             setCurrentlyPlayingSegIdx(currentSegIdx);
             const seg = segments[currentSegIdx];
+            if (currentAudioRef.current) {
+                currentAudioRef.current.pause();
+                currentAudioRef.current = null;
+            }
             if (globalAudioObj) {
                 globalAudioObj.pause();
                 setGlobalAudioObj(null);
@@ -216,6 +227,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                 const audioCtx = getAudioCtx();
                 const player = new AudioBufferPlayer(audioCtx, seg.audioBuffer);
                 player.play(Math.max(0, offsetTime));
+                currentAudioRef.current = player;
                 setGlobalAudioObj(player);
             }
         }
@@ -273,6 +285,10 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                             // or just toggle playback quickly to reset the play loop.
                             // For a clean architecture, we'll do the audio swap right here.
                             const seg = segments[newSegIdx];
+                            if (currentAudioRef.current) {
+                                currentAudioRef.current.pause();
+                                currentAudioRef.current = null;
+                            }
                             if (globalAudioObj) {
                                 globalAudioObj.pause();
                                 setGlobalAudioObj(null);
@@ -281,6 +297,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                                 const audioCtx = getAudioCtx();
                                 const player = new AudioBufferPlayer(audioCtx, seg.audioBuffer);
                                 player.play(0); // starting exactly at the segment boundary
+                                currentAudioRef.current = player;
                                 setGlobalAudioObj(player);
                             }
                             return newSegIdx;
