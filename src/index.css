@@ -145,7 +145,7 @@ input[type="text"], input[type="number"], textarea {
     transition: border-color 0.2s, background 0.2s;
 }
 
-input:focus:not(:disabled), textarea:focus:not(:disabled) {
+input[type="text"]:focus:not(:disabled), input[type="number"]:focus:not(:disabled), textarea:focus:not(:disabled) {
     border-color: #3a3b3c;
     background: #1e1e1e;
 }
@@ -644,7 +644,8 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
     transition: border-color 0.2s ease, background 0.2s ease !important;
 }
 
-.sidebar input:focus:not(:disabled),
+.sidebar input[type="text"]:focus:not(:disabled),
+.sidebar input[type="number"]:focus:not(:disabled),
 .sidebar textarea:focus:not(:disabled) {
     border-color: var(--accent) !important;
     background: var(--bg-input) !important;

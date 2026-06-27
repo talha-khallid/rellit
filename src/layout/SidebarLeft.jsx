@@ -1,6 +1,6 @@
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
-import { CustomColorPicker } from './SidebarRight';
+import { CustomColorPicker } from '../components/CustomColorPicker';
 
 // --- Dynamic Waveform Component ---
 const Waveform = ({ audioBuffer }) => {
@@ -61,8 +61,73 @@ export const SidebarLeft = () => {
         setCurrentLineIndex,
         setCurrentlyPlayingSegIdx,
         videoBgColor, setVideoBgColor,
-        videoAlignPercent, setVideoAlignPercent
+        videoAlignPercent, setVideoAlignPercent,
+        fontFamily, setFontFamily,
+        fontWeight, setFontWeight,
+        textTransform, setTextTransform,
+        fontSize, setFontSize,
+        textAlign, setTextAlign,
+        letterSpacing, setLetterSpacing
     } = useContext(EditorContext);
+
+    const renderTypographySettings = () => (
+        <div className="typography-settings" style={{ marginTop: 32, borderTop: '1px solid var(--border)', paddingTop: 24 }}>
+            <span className="context-label" style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16, display: 'block', fontWeight: 500 }}>Global Typography</span>
+            
+            <div className="prop-group" style={{ marginBottom: 16 }}>
+                <label>Font Family</label>
+                <select className="panel-select" value={fontFamily} onChange={(e) => setFontFamily(e.target.value)}>
+                    <option value="Inter, sans-serif">Inter</option>
+                    <option value="Arial, sans-serif">Arial</option>
+                    <option value="'Courier New', Courier, monospace">Courier New</option>
+                    <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                    <option value="Impact, fantasy">Impact</option>
+                    <option value="'Comic Sans MS', cursive">Comic Sans</option>
+                </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                <div className="prop-group" style={{ flex: 1 }}>
+                    <label>Weight</label>
+                    <select className="panel-select" value={fontWeight} onChange={(e) => setFontWeight(parseInt(e.target.value))}>
+                        <option value={400}>Regular</option>
+                        <option value={500}>Medium</option>
+                        <option value={700}>Bold</option>
+                        <option value={900}>Black</option>
+                    </select>
+                </div>
+                <div className="prop-group" style={{ flex: 1 }}>
+                    <label>Size</label>
+                    <input className="panel-input" type="number" value={fontSize} onChange={(e) => setFontSize(parseFloat(e.target.value) || 10)} />
+                </div>
+            </div>
+
+            <div className="prop-group" style={{ marginBottom: 16 }}>
+                <label>Transform</label>
+                <select className="panel-select" value={textTransform} onChange={(e) => setTextTransform(e.target.value)}>
+                    <option value="none">Normal</option>
+                    <option value="uppercase">UPPERCASE</option>
+                    <option value="lowercase">lowercase</option>
+                    <option value="capitalize">Capitalize</option>
+                </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+                <div className="prop-group" style={{ flex: 1 }}>
+                    <label>Align</label>
+                    <select className="panel-select" value={textAlign} onChange={(e) => setTextAlign(e.target.value)}>
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                    </select>
+                </div>
+                <div className="prop-group" style={{ flex: 1 }}>
+                    <label>Spacing</label>
+                    <input className="panel-input" type="number" step="0.5" value={letterSpacing} onChange={(e) => setLetterSpacing(parseFloat(e.target.value) || 0)} />
+                </div>
+            </div>
+        </div>
+    );
 
     const [activeTab, setActiveTab] = useState('media');
     const [newText, setNewText] = useState('');
@@ -277,6 +342,8 @@ export const SidebarLeft = () => {
                                 style={{ width: '100%', height: 4, cursor: 'pointer', margin: '8px 0' }} 
                             />
                         </div>
+
+                        {renderTypographySettings()}
                     </div>
                 )}
             </div>

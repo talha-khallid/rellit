@@ -1,6 +1,6 @@
 import React from 'react';
 import { EditorProvider } from './context/EditorContext';
-import { AppLayout } from './components/AppLayout';
+import { AppLayout } from './layout/AppLayout';
 
 function App() {
   return (
