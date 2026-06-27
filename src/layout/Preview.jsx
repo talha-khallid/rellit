@@ -602,19 +602,19 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <button onClick={skipPrevLine} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex' }} title="Previous Line">
+                    <button tabIndex="-1" onMouseDown={e => e.preventDefault()} onClick={skipPrevLine} style={{ background: 'none', outline: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex' }} title="Previous Line">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
                         </svg>
                     </button>
 
-                    <button onClick={togglePlayback} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex' }} title={isPlaying ? "Pause" : "Play"}>
+                    <button tabIndex="-1" onMouseDown={e => e.preventDefault()} onClick={togglePlayback} style={{ background: 'none', outline: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex' }} title={isPlaying ? "Pause" : "Play"}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                             {isPlaying ? <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> : <path d="M8 5v14l11-7z" />}
                         </svg>
                     </button>
 
-                    <button onClick={skipNextLine} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex' }} title="Next Line">
+                    <button tabIndex="-1" onMouseDown={e => e.preventDefault()} onClick={skipNextLine} style={{ background: 'none', outline: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex' }} title="Next Line">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M14.5 12L6 6v12zm3.5-6h2v12h-2z"/>
                         </svg>
@@ -623,8 +623,9 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 100, justifyContent: 'flex-end' }}>
                     <button 
+                        tabIndex="-1" onMouseDown={e => e.preventDefault()}
                         onClick={() => setIsLooping(!isLooping)} 
-                        style={{ background: 'none', border: 'none', color: isLooping ? 'var(--accent)' : '#666', cursor: 'pointer', padding: 4, display: 'flex', transition: 'color 0.2s' }}
+                        style={{ background: 'none', outline: 'none', border: 'none', color: isLooping ? 'var(--accent)' : '#666', cursor: 'pointer', padding: 4, display: 'flex', transition: 'color 0.2s' }}
                         title="Toggle Loop Sequence"
                     >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -633,8 +634,9 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                     </button>
 
                     <button 
+                        tabIndex="-1" onMouseDown={e => e.preventDefault()}
                         onClick={toggleFullscreen} 
-                        style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex' }}
+                        style={{ background: 'none', outline: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex' }}
                         title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
                     >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
