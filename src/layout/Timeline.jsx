@@ -1,5 +1,6 @@
 import React, { useContext, useRef, useState, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
+import { AudioWaveform } from '../components/AudioWaveform';
 
 export const Timeline = () => {
     const { 
@@ -47,10 +48,12 @@ export const Timeline = () => {
     let timeAccumulator = 0;
     const lineBlocks = visualLines.map((line, i) => {
         const dur = parseFloat(lineSettings[i]?.duration || 0.1);
+        const text = line.map(span => span.text).join(' ');
         const block = {
             index: i,
             start: timeAccumulator,
-            duration: dur
+            duration: dur,
+            text: text
         };
         timeAccumulator += dur;
         return block;
@@ -69,7 +72,7 @@ export const Timeline = () => {
         
         if (currentSegIdx !== segIdx) {
             if (currentSegIdx !== -1 && hasAudio) {
-                audioBlocks.push({ index: currentSegIdx, start: audioBlockStart, duration: audioBlockDur });
+                audioBlocks.push({ index: currentSegIdx, start: audioBlockStart, duration: audioBlockDur, audioBuffer: segments[currentSegIdx].audioBuffer });
             }
             currentSegIdx = segIdx;
             audioBlockStart = lineBlocks[i].start;
@@ -80,7 +83,7 @@ export const Timeline = () => {
         }
     }
     if (currentSegIdx !== -1 && hasAudio) {
-        audioBlocks.push({ index: currentSegIdx, start: audioBlockStart, duration: audioBlockDur });
+        audioBlocks.push({ index: currentSegIdx, start: audioBlockStart, duration: audioBlockDur, audioBuffer: segments[currentSegIdx].audioBuffer });
     }
 
     const numTicks = Math.ceil(totalTime) + 2;
@@ -231,42 +234,49 @@ export const Timeline = () => {
                         <div className="playhead-hitbox"></div>
                     </div>
 
-                    <div className="track audio-track" data-label="Audio">
-                        {audioBlocks.map(ab => (
-                            <div key={ab.index} className="timeline-block audio-block" style={{ left: ab.start * timelineScale, width: ab.duration * timelineScale, top: 0 }}>
-                                Audio {ab.index + 1}
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="track text-track" data-label="Text Lines">
-                        {lineBlocks.map(lb => (
-                            <div 
-                                key={lb.index} 
-                                className={`timeline-block text-block ${lb.index === currentLineIndex ? 'active' : ''}`} 
-                                onMouseDown={(e) => {
-                                    if (e.target.closest('.resize-handle-right')) return;
-                                    if (isPlaying) togglePlayback();
-                                    setCurrentLineIndex(lb.index);
-                                    e.stopPropagation();
-                                }}
-                                style={{ 
-                                    left: lb.start * timelineScale, width: lb.duration * timelineScale, top: 0
-                                }}
-                            >
-                                Line {lb.index + 1}
+                    <div className="tracks-group">
+                        <div className="track text-track" data-label="Text Lines">
+                            {lineBlocks.map(lb => (
                                 <div 
-                                    className="resize-handle-right" 
+                                    key={lb.index} 
+                                    className={`timeline-block text-block ${lb.index === currentLineIndex ? 'active' : ''}`} 
                                     onMouseDown={(e) => {
-                                        setIsResizing(true);
-                                        setResizeLineIdx(lb.index);
-                                        setStartX(e.clientX);
-                                        setInitialDur(lb.duration);
+                                        if (e.target.closest('.resize-handle-right')) return;
+                                        if (isPlaying) togglePlayback();
+                                        setCurrentLineIndex(lb.index);
                                         e.stopPropagation();
                                     }}
-                                ></div>
-                            </div>
-                        ))}
+                                    style={{ 
+                                        left: lb.start * timelineScale, width: lb.duration * timelineScale, top: 0, height: '100%'
+                                    }}
+                                >
+                                    <span className="block-text-label">{lb.text}</span>
+                                    <div 
+                                        className="resize-handle-right" 
+                                        onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            setIsResizing(true);
+                                            setResizeLineIdx(lb.index);
+                                            setStartX(e.clientX);
+                                            setInitialDur(lb.duration);
+                                            if (isPlaying) togglePlayback();
+                                        }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="track audio-track" data-label="Audio">
+                            {audioBlocks.map(ab => (
+                                <div key={ab.index} className="timeline-block audio-block" style={{ left: ab.start * timelineScale, width: ab.duration * timelineScale, top: 0, padding: 0, height: '100%' }}>
+                                    <AudioWaveform 
+                                        audioBuffer={ab.audioBuffer} 
+                                        width={ab.duration * timelineScale} 
+                                        height={28} 
+                                    />
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
