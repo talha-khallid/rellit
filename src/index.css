@@ -298,12 +298,13 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
     box-sizing: border-box;
 }
 .text-block {
-    background: linear-gradient(180deg, #f07426 0%, #e05a10 100%);
+    background: #d85712; /* Clean flat orange */
     color: #fff;
     cursor: pointer;
-    border: 1px solid rgba(0,0,0,0.6);
-    padding: 0 10px;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    border: 1px solid rgba(0,0,0,0.2);
+    border-radius: 6px;
+    padding: 0 12px;
+    box-sizing: border-box;
 }
 .text-block:hover { filter: brightness(1.1); }
 .block-text-label {
@@ -317,7 +318,7 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
     filter: brightness(1.15);
     z-index: 15;
     border-color: #ffffff;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 0 0 1px #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
 }
 .resize-handle-right {
     position: absolute;

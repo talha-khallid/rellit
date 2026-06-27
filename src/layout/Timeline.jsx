@@ -48,7 +48,7 @@ export const Timeline = () => {
     let timeAccumulator = 0;
     const lineBlocks = visualLines.map((line, i) => {
         const dur = parseFloat(lineSettings[i]?.duration || 0.1);
-        const text = line.map(span => span.text).join(' ');
+        const text = line.map(span => span.el.textContent).join(' ');
         const block = {
             index: i,
             start: timeAccumulator,
@@ -267,15 +267,18 @@ export const Timeline = () => {
                         </div>
 
                         <div className="track audio-track" data-label="Audio">
-                            {audioBlocks.map(ab => (
-                                <div key={ab.index} className="timeline-block audio-block" style={{ left: ab.start * timelineScale, width: ab.duration * timelineScale, top: 0, padding: 0, height: '100%' }}>
-                                    <AudioWaveform 
-                                        audioBuffer={ab.audioBuffer} 
-                                        width={ab.duration * timelineScale} 
-                                        height={28} 
-                                    />
-                                </div>
-                            ))}
+                            {audioBlocks.map(ab => {
+                                const blockWidth = Math.max(1, ab.duration * timelineScale - 1);
+                                return (
+                                    <div key={ab.index} className="timeline-block audio-block" style={{ left: ab.start * timelineScale, width: blockWidth, top: 0, padding: 0, height: '100%' }}>
+                                        <AudioWaveform 
+                                            audioBuffer={ab.audioBuffer} 
+                                            width={blockWidth} 
+                                            height={28} 
+                                        />
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
