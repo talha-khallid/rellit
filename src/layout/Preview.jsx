@@ -56,20 +56,37 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         let globalCharIndex = 0;
         
         segments.forEach((seg, segIndex) => {
-            const segWords = seg.text.split(' ');
-            const timePerWord = parseFloat(seg.duration) / segWords.length;
+            const rawTokens = seg.text.split(' ');
+            const parsedWords = [];
             
-            segWords.forEach((word, wordIndex) => {
-                if (word.trim() === '') return;
-                
-                const chars = word.split('').map(char => ({ char, id: globalCharIndex++ }));
+            rawTokens.forEach((token) => {
+                if (token === '') return;
+                const parts = token.split('\n');
+                parts.forEach((part, i) => {
+                    if (part !== '') {
+                        parsedWords.push({ text: part, hasNewlineAfter: i < parts.length - 1 });
+                    } else if (i < parts.length - 1) {
+                         if (parsedWords.length > 0) {
+                             parsedWords[parsedWords.length - 1].hasNewlineAfter = true;
+                         }
+                    }
+                });
+            });
+
+            if (parsedWords.length === 0) return;
+
+            const timePerWord = parseFloat(seg.duration) / parsedWords.length;
+            
+            parsedWords.forEach((pw, wordIndex) => {
+                const chars = pw.text.split('').map(char => ({ char, id: globalCharIndex++ }));
                 
                 words.push({
                     chars,
                     spaceId: globalCharIndex++,
                     baseDuration: timePerWord,
                     segIndex,
-                    isLastInSeg: wordIndex === segWords.length - 1
+                    isLastInSeg: wordIndex === parsedWords.length - 1,
+                    hasNewlineAfter: pw.hasNewlineAfter
                 });
             });
         });
@@ -660,7 +677,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                                                         );
                                                     })()}
                                                 </span>
-                                                {word.isLastInSeg && wIdx !== renderedWords.length - 1 && <div style={{ flexBasis: '100%', height: 0 }}></div>}
+                                                {(word.isLastInSeg || word.hasNewlineAfter) && wIdx !== renderedWords.length - 1 && <div style={{ flexBasis: '100%', height: 0 }}></div>}
                                             </React.Fragment>
                                         );
                                     })}
