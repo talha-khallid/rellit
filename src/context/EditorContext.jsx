@@ -83,6 +83,14 @@ export const EditorProvider = ({ children }) => {
     const [videoBgColor, setVideoBgColor] = useState('#050505');
     const [videoAlignPercent, setVideoAlignPercent] = useState(50);
 
+    // Typography Settings
+    const [fontFamily, setFontFamily] = useState('Inter, sans-serif');
+    const [fontWeight, setFontWeight] = useState(500);
+    const [textTransform, setTextTransform] = useState('none');
+    const [fontSize, setFontSize] = useState(43.5);
+    const [textAlign, setTextAlign] = useState('left');
+    const [letterSpacing, setLetterSpacing] = useState(0);
+
     // Sync from localStorage or default
     useEffect(() => {
         fetch('/captions.json')
@@ -197,7 +205,13 @@ export const EditorProvider = ({ children }) => {
         currentLineStartSysTimeRef, currentLineStartTimeSecondsRef,
         getAudioCtx, AudioBufferPlayer,
         videoBgColor, setVideoBgColor,
-        videoAlignPercent, setVideoAlignPercent
+        videoAlignPercent, setVideoAlignPercent,
+        fontFamily, setFontFamily,
+        fontWeight, setFontWeight,
+        textTransform, setTextTransform,
+        fontSize, setFontSize,
+        textAlign, setTextAlign,
+        letterSpacing, setLetterSpacing
     };
 
     return (

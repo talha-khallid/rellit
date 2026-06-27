@@ -14,7 +14,8 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         currentLineStartSysTimeRef, currentLineStartTimeSecondsRef,
         timelineScale,
         getAudioCtx, AudioBufferPlayer,
-        videoBgColor, videoAlignPercent
+        videoBgColor, videoAlignPercent,
+        fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing
     } = useContext(EditorContext);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -134,7 +135,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
             clearTimeout(fallbackTimer);
         };
         // eslint-disable-next-line
-    }, [renderedWords, setVisualLines]);
+    }, [renderedWords, setVisualLines, fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing]);
 
     useEffect(() => {
         if (visualLines.length === 0 || !trackRef.current || !scrollContainerRef.current) return;
@@ -301,9 +302,9 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
 
         document.body.appendChild(screenEl);
 
-        screenEl.style.cssText = `width: 1080px !important; height: 1920px !important; max-width: none !important; position: absolute !important; top: 0 !important; left: 0 !important; z-index: -1000 !important; transform: scale(1) !important; display: block !important; background-color: ${videoBgColor} !important; border-radius: 0 !important;`;
+        screenEl.style.cssText = `width: 1080px !important; height: 1920px !important; max-width: none !important; position: absolute !important; top: 0 !important; left: 0 !important; z-index: -1000 !important; transform: scale(1) !important; display: block !important; background-color: ${videoBgColor} !important; border-radius: 0 !important; font-family: ${fontFamily} !important; letter-spacing: ${letterSpacing}px !important; text-transform: ${textTransform} !important; text-align: ${textAlign} !important;`;
         if (wrapperEl) {
-            wrapperEl.style.cssText = `position: absolute !important; top: ${videoAlignPercent}% !important; transform: translateY(-50%) !important; left: 0 !important; width: 100% !important; padding-left: 54px !important; padding-right: 157px !important; box-sizing: border-box !important; font-size: 43.5px !important; line-height: 1.45 !important;`;
+            wrapperEl.style.cssText = `position: absolute !important; top: ${videoAlignPercent}% !important; transform: translateY(-50%) !important; left: 0 !important; width: 100% !important; padding-left: 54px !important; padding-right: 157px !important; box-sizing: border-box !important; font-size: ${fontSize}px !important; line-height: 1.45 !important;`;
         }
         
         const originalTrackTransform = trackEl.style.transform;
@@ -357,7 +358,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
             setTimeout(captureExportGeometry, 40);
         }
         // eslint-disable-next-line
-    }, [visualLines, charOverrides, lineSettings, screenScale, videoBgColor, videoAlignPercent]);
+    }, [visualLines, charOverrides, lineSettings, screenScale, videoBgColor, videoAlignPercent, fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing]);
 
     useEffect(() => {
         const handleSelection = () => {
@@ -456,7 +457,11 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                             width: 1080, height: 1920, backgroundColor: videoBgColor,
                             boxSizing: 'border-box', display: 'block',
                             position: 'absolute', top: '50%', left: '50%', transformOrigin: 'top left',
-                            transform: `scale(${screenScale}) translate(-50%, -50%)`
+                            transform: `scale(${screenScale}) translate(-50%, -50%)`,
+                            fontFamily: fontFamily,
+                            letterSpacing: `${letterSpacing}px`,
+                            textTransform: textTransform,
+                            textAlign: textAlign
                         }}
                     >
                         <div 
@@ -470,7 +475,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                                 paddingLeft: 54, 
                                 paddingRight: 157, 
                                 boxSizing: 'border-box', 
-                                fontSize: 43.5, 
+                                fontSize: fontSize, 
                                 lineHeight: 1.45 
                             }}
                         >
@@ -489,7 +494,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                                     scrubToLine(e.deltaY > 0 ? 1 : -1);
                                 }}
                             >
-                                <div className="caption-track" id="caption-track" ref={trackRef} style={{ position: 'relative', transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.3, 1)', willChange: 'transform', textAlign: 'left' }}>
+                                <div className="caption-track" id="caption-track" ref={trackRef} style={{ position: 'relative', transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.3, 1)', willChange: 'transform', textAlign: textAlign }}>
                                     {renderedWords.map((word, wIdx) => {
                                         let active = false;
                                         if (visualLines[currentLineIndex]) {
@@ -527,7 +532,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                                                                 data-override-color={charOverrides[c.id]}
                                                                 style={{
                                                                     display: 'inline',
-                                                                    fontWeight: 500,
+                                                                    fontWeight: fontWeight,
                                                                     transition: 'color 0.1s ease, text-shadow 0.1s ease, background-color 0.1s ease',
                                                                     color: textColor,
                                                                     textShadow: active && !isSelected ? `0 0 1px ${color}` : '',
@@ -551,7 +556,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                                                                 data-char-id={word.spaceId}
                                                                 data-override-color={charOverrides[word.spaceId]}
                                                                 style={{
-                                                                    display: 'inline', fontWeight: 500, transition: 'color 0.1s ease, text-shadow 0.1s ease, background-color 0.1s ease',
+                                                                    display: 'inline', fontWeight: fontWeight, transition: 'color 0.1s ease, text-shadow 0.1s ease, background-color 0.1s ease',
                                                                     color: spaceTextColor,
                                                                     textShadow: active && !spaceIsSelected ? `0 0 1px ${spaceColor}` : '',
                                                                     backgroundColor: spaceBgColor,
