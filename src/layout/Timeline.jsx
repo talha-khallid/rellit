@@ -8,7 +8,7 @@ export const Timeline = () => {
         currentLineIndex, setCurrentLineIndex,
         timelineScale, setTimelineScale,
         setCurrentSelectionCharIds,
-        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef
+        currentTimeRef
     } = useContext(EditorContext);
 
     const [isResizing, setIsResizing] = useState(false);
@@ -26,30 +26,23 @@ export const Timeline = () => {
     useEffect(() => {
         let reqId;
         const loop = () => {
-            if (isPlaying && visualLines.length > 0 && playheadRef.current && timelineContentRef.current) {
-                const el = (performance.now() - currentLineStartSysTimeRef.current) / 1000;
-                let t = currentLineStartTimeSecondsRef.current + Math.max(0, el);
-                if (t > totalTime) t = totalTime;
-
+            if (visualLines.length > 0 && playheadRef.current && timelineContentRef.current) {
+                const t = currentTimeRef.current;
                 playheadRef.current.style.left = `${t * timelineScale}px`;
 
-                const scrollArea = timelineContentRef.current.parentElement;
-                const px = t * timelineScale;
-                if (px < scrollArea.scrollLeft + 60 || px > scrollArea.scrollLeft + scrollArea.clientWidth - 60) {
-                    scrollArea.scrollLeft = px - scrollArea.clientWidth / 2;
+                if (isPlaying) {
+                    const scrollArea = timelineContentRef.current.parentElement;
+                    const px = t * timelineScale;
+                    if (px < scrollArea.scrollLeft + 60 || px > scrollArea.scrollLeft + scrollArea.clientWidth - 60) {
+                        scrollArea.scrollLeft = px - scrollArea.clientWidth / 2;
+                    }
                 }
-            } else if (!isPlaying && !isDraggingPlayhead && playheadRef.current) {
-                let pTime = 0;
-                for (let i = 0; i < currentLineIndex; i++) {
-                    pTime += parseFloat(lineSettings[i]?.duration || 0.1);
-                }
-                playheadRef.current.style.left = `${pTime * timelineScale}px`;
             }
             reqId = requestAnimationFrame(loop);
         };
         reqId = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(reqId);
-    }, [isPlaying, visualLines, timelineScale, currentLineIndex, isDraggingPlayhead, lineSettings, totalTime, currentLineStartSysTimeRef, currentLineStartTimeSecondsRef]);
+    }, [isPlaying, visualLines, timelineScale, currentTimeRef]);
 
     let timeAccumulator = 0;
     const lineBlocks = visualLines.map((line, i) => {
@@ -99,6 +92,8 @@ export const Timeline = () => {
         const clickX = e.clientX - rect.left;
         const targetTime = Math.max(0, clickX / timelineScale);
         
+        currentTimeRef.current = targetTime;
+        
         let targetLineIndex = visualLines.length - 1;
         for (let i = 0; i < lineBlocks.length; i++) {
             if (targetTime >= lineBlocks[i].start && targetTime <= lineBlocks[i].start + lineBlocks[i].duration) {
@@ -110,6 +105,7 @@ export const Timeline = () => {
         
         setCurrentLineIndex(targetLineIndex);
         setCurrentSelectionCharIds([]);
+        window.dispatchEvent(new CustomEvent('timeupdate-seek'));
     };
 
     useEffect(() => {

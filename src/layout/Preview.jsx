@@ -11,7 +11,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         globalAudioObj, setGlobalAudioObj,
         currentlyPlayingSegIdx, setCurrentlyPlayingSegIdx,
         charOverrides,
-        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef,
+        currentTimeRef, lastFrameTimeRef,
         timelineScale,
         getAudioCtx, AudioBufferPlayer,
         videoBgColor, videoAlignPercent,
@@ -170,121 +170,196 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         };
     }, [isFullscreen, visualLines, lineSettings]);
 
+    // --- TIME-BASED PLAYBACK ENGINE ---
     useEffect(() => {
         let frameId;
-        const updateTrackedTime = () => {
-            if (visualLines.length > 0) {
-                if (isPlaying) {
-                    const elapsed = (performance.now() - currentLineStartSysTimeRef.current) / 1000;
-                    const calculatedTime = currentLineStartTimeSecondsRef.current + Math.max(0, elapsed);
-                    const absoluteTotal = getTotalDuration();
-                    setCurrentTimeDisplay(formatTime(Math.min(calculatedTime, absoluteTotal)));
-                } else {
-                    let staticTime = 0;
-                    for (let i = 0; i < currentLineIndex; i++) {
-                        staticTime += parseFloat(lineSettings[i]?.duration || 0.1);
-                    }
-                    setCurrentTimeDisplay(formatTime(staticTime));
-                }
-                setTotalTimeDisplay(formatTime(getTotalDuration()));
-            }
-            frameId = requestAnimationFrame(updateTrackedTime);
-        };
-        frameId = requestAnimationFrame(updateTrackedTime);
-        return () => cancelAnimationFrame(frameId);
-        // eslint-disable-next-line
-    }, [isPlaying, currentLineIndex, visualLines, lineSettings]);
-
-    const playLoop = () => {
-        if (!isPlaying || visualLines.length === 0) return;
         
-        let targetLineIdx = currentLineIndex;
-        if (targetLineIdx >= visualLines.length) {
-            if (isLooping) {
-                setCurrentLineIndex(0);
-                setCurrentlyPlayingSegIdx(-1);
-                return;
-            } else {
-                togglePlayback();
-                return;
+        if (!isPlaying || visualLines.length === 0) {
+            if (globalAudioObj) globalAudioObj.pause();
+            setCurrentTimeDisplay(formatTime(currentTimeRef.current));
+            setTotalTimeDisplay(formatTime(getTotalDuration()));
+            return;
+        }
+
+        // Start playing
+        lastFrameTimeRef.current = performance.now();
+        
+        // Initial Audio Setup for the current exact time
+        let absoluteSegmentStart = 0;
+        let currentSegIdx = -1;
+        let acc = 0;
+        for (let i = 0; i < visualLines.length; i++) {
+            const dur = parseFloat(lineSettings[i]?.duration || 0.1);
+            if (currentTimeRef.current >= acc && currentTimeRef.current < acc + dur) {
+                currentSegIdx = visualLines[i][0].segIndex;
+                break;
             }
+            acc += dur;
         }
         
-        let startSecs = 0;
-        for(let i = 0; i < targetLineIdx; i++) {
-            startSecs += parseFloat(lineSettings[i]?.duration || 0.1);
+        // Calculate absolute start of the segment
+        for (let i = 0; i < visualLines.length; i++) {
+            if (visualLines[i][0].segIndex < currentSegIdx) {
+                absoluteSegmentStart += parseFloat(lineSettings[i]?.duration || 0.1);
+            }
         }
-        currentLineStartTimeSecondsRef.current = startSecs;
-        currentLineStartSysTimeRef.current = performance.now();
 
-        const currentSegIdx = visualLines[targetLineIdx][0].segIndex;
-        
-        if (currentSegIdx !== currentlyPlayingSegIdx) {
+        if (currentSegIdx !== -1) {
             setCurrentlyPlayingSegIdx(currentSegIdx);
             const seg = segments[currentSegIdx];
-            
             if (globalAudioObj) {
                 globalAudioObj.pause();
                 setGlobalAudioObj(null);
             }
             if (seg && seg.audioBuffer) {
-                let offsetTime = 0;
-                for(let i=0; i<targetLineIdx; i++) {
-                    if (visualLines[i][0].segIndex === currentSegIdx) {
-                        offsetTime += parseFloat(lineSettings[i]?.duration || 0.1);
-                    }
-                }
-                
+                const offsetTime = currentTimeRef.current - absoluteSegmentStart;
                 const audioCtx = getAudioCtx();
                 const player = new AudioBufferPlayer(audioCtx, seg.audioBuffer);
-                player.play(offsetTime);
+                player.play(Math.max(0, offsetTime));
                 setGlobalAudioObj(player);
             }
         }
 
         setCurrentSelectionCharIds([]); 
-        
-        let durationMs = parseFloat(lineSettings[targetLineIdx]?.duration || 0.1) * 1000;
-        lineTimerRef.current = setTimeout(() => {
-            setCurrentLineIndex(prev => prev + 1);
-        }, durationMs);
-    };
 
-    // TIMEOUT GLITCH FIX: Strict cleanup before starting a new cycle
-    useEffect(() => {
-        if (lineTimerRef.current) {
-            clearTimeout(lineTimerRef.current);
-        }
+        const tick = () => {
+            const now = performance.now();
+            const delta = (now - lastFrameTimeRef.current) / 1000;
+            lastFrameTimeRef.current = now;
+            
+            currentTimeRef.current += delta;
+            const totalDur = getTotalDuration();
+            
+            if (currentTimeRef.current >= totalDur) {
+                if (isLooping) {
+                    currentTimeRef.current = 0;
+                    // To cleanly restart audio, we toggle playback off then on next frame
+                    togglePlayback();
+                    setTimeout(togglePlayback, 10);
+                    return;
+                } else {
+                    currentTimeRef.current = totalDur;
+                    togglePlayback();
+                    return;
+                }
+            }
 
-        if (isPlaying) {
-            playLoop();
-        } else {
-            if (globalAudioObj) globalAudioObj.pause();
-        }
+            // Sync visual displays
+            setCurrentTimeDisplay(formatTime(currentTimeRef.current));
+            setTotalTimeDisplay(formatTime(totalDur));
+
+            // Sync Line Index
+            let tAcc = 0;
+            let newIdx = 0;
+            let newSegIdx = -1;
+            for (let i = 0; i < visualLines.length; i++) {
+                const dur = parseFloat(lineSettings[i]?.duration || 0.1);
+                if (currentTimeRef.current >= tAcc && currentTimeRef.current < tAcc + dur) {
+                    newIdx = i;
+                    newSegIdx = visualLines[i][0].segIndex;
+                    break;
+                }
+                tAcc += dur;
+            }
+
+            setCurrentLineIndex(prev => {
+                if (prev !== newIdx) {
+                    // We crossed a line boundary.
+                    // Did we also cross a segment boundary? If so, audio needs to switch.
+                    setCurrentlyPlayingSegIdx(prevSeg => {
+                        if (prevSeg !== newSegIdx) {
+                            // Stop current audio, next tick or effect should start new audio
+                            // Actually it's easier to let a separate effect handle audio segment switching,
+                            // or just toggle playback quickly to reset the play loop.
+                            // For a clean architecture, we'll do the audio swap right here.
+                            const seg = segments[newSegIdx];
+                            if (globalAudioObj) {
+                                globalAudioObj.pause();
+                                setGlobalAudioObj(null);
+                            }
+                            if (seg && seg.audioBuffer) {
+                                const audioCtx = getAudioCtx();
+                                const player = new AudioBufferPlayer(audioCtx, seg.audioBuffer);
+                                player.play(0); // starting exactly at the segment boundary
+                                setGlobalAudioObj(player);
+                            }
+                            return newSegIdx;
+                        }
+                        return prevSeg;
+                    });
+                }
+                return newIdx;
+            });
+
+            frameId = requestAnimationFrame(tick);
+        };
+
+        frameId = requestAnimationFrame(tick);
 
         return () => {
-            if (lineTimerRef.current) clearTimeout(lineTimerRef.current);
+            cancelAnimationFrame(frameId);
         };
         // eslint-disable-next-line
-    }, [isPlaying, currentLineIndex, isLooping]);
+    }, [isPlaying, isLooping, visualLines, segments]);
+
+    useEffect(() => {
+        const handleSeek = () => {
+            if (!isPlaying) {
+                setCurrentTimeDisplay(formatTime(currentTimeRef.current));
+                setTotalTimeDisplay(formatTime(getTotalDuration()));
+            }
+        };
+        window.addEventListener('timeupdate-seek', handleSeek);
+        return () => window.removeEventListener('timeupdate-seek', handleSeek);
+    }, [isPlaying, getTotalDuration]);
+
+    // Navigation Helpers
+    const setTimeAndSync = (newTime) => {
+        let t = Math.max(0, Math.min(newTime, getTotalDuration()));
+        currentTimeRef.current = t;
+        
+        let tAcc = 0;
+        let newIdx = 0;
+        for (let i = 0; i < visualLines.length; i++) {
+            const dur = parseFloat(lineSettings[i]?.duration || 0.1);
+            if (t >= tAcc && t < tAcc + dur) {
+                newIdx = i;
+                break;
+            }
+            tAcc += dur;
+        }
+        setCurrentLineIndex(newIdx);
+        setCurrentTimeDisplay(formatTime(t));
+    };
 
     const skipNextLine = () => {
         if (visualLines.length === 0) return;
-        setCurrentLineIndex(prev => (prev + 1 >= visualLines.length ? 0 : prev + 1));
+        let nextIdx = currentLineIndex + 1;
+        if (nextIdx >= visualLines.length) nextIdx = 0;
+        
+        let tAcc = 0;
+        for(let i=0; i<nextIdx; i++) tAcc += parseFloat(lineSettings[i]?.duration || 0.1);
+        setTimeAndSync(tAcc);
     };
 
     const skipPrevLine = () => {
         if (visualLines.length === 0) return;
-        setCurrentLineIndex(prev => (prev - 1 < 0 ? visualLines.length - 1 : prev - 1));
+        let prevIdx = currentLineIndex - 1;
+        if (prevIdx < 0) prevIdx = visualLines.length - 1;
+        
+        let tAcc = 0;
+        for(let i=0; i<prevIdx; i++) tAcc += parseFloat(lineSettings[i]?.duration || 0.1);
+        setTimeAndSync(tAcc);
     };
 
     const scrubToLine = (offset) => {
-        setCurrentLineIndex(prev => {
-            let newIndex = prev + offset;
-            if (newIndex < 0) newIndex = 0;
-            if (newIndex >= visualLines.length) newIndex = visualLines.length - 1;
-            return newIndex;
-        });
+        let targetIdx = currentLineIndex + offset;
+        if (targetIdx < 0) targetIdx = 0;
+        if (targetIdx >= visualLines.length) targetIdx = visualLines.length - 1;
+        
+        let tAcc = 0;
+        for(let i=0; i<targetIdx; i++) tAcc += parseFloat(lineSettings[i]?.duration || 0.1);
+        setTimeAndSync(tAcc);
         setCurrentSelectionCharIds([]);
     };
 

@@ -73,8 +73,8 @@ export const EditorProvider = ({ children }) => {
     const [globalAudioObj, setGlobalAudioObj] = useState(null);
     const [currentlyPlayingSegIdx, setCurrentlyPlayingSegIdx] = useState(-1);
 
-    const currentLineStartSysTimeRef = useRef(0);
-    const currentLineStartTimeSecondsRef = useRef(0);
+    const currentTimeRef = useRef(0);
+    const lastFrameTimeRef = useRef(0);
 
     // Timeline scale
     const [timelineScale, setTimelineScale] = useState(70);
@@ -202,7 +202,7 @@ export const EditorProvider = ({ children }) => {
         timelineScale, setTimelineScale,
         updateLineSettings, stopAudio,
         enforceSegmentAudioConstraints,
-        currentLineStartSysTimeRef, currentLineStartTimeSecondsRef,
+        currentTimeRef, lastFrameTimeRef,
         getAudioCtx, AudioBufferPlayer,
         videoBgColor, setVideoBgColor,
         videoAlignPercent, setVideoAlignPercent,
