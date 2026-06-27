@@ -17,6 +17,7 @@ export const Timeline = () => {
     const [initialDur, setInitialDur] = useState(0);
     
     const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
+    const scrollAreaRef = useRef(null);
     const timelineContentRef = useRef(null);
     const playheadRef = useRef(null);
 
@@ -167,6 +168,23 @@ export const Timeline = () => {
         };
         // eslint-disable-next-line
     }, [isResizing, isDraggingPlayhead, startX, initialDur, timelineScale, resizeLineIdx, lineSettings, visualLines, segments]);
+    useEffect(() => {
+        const area = scrollAreaRef.current;
+        if (!area) return;
+
+        const handleWheel = (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -15 : 15;
+                setTimelineScale(prev => Math.max(20, Math.min(250, prev + delta)));
+            }
+        };
+
+        area.addEventListener('wheel', handleWheel, { passive: false });
+        return () => {
+            area.removeEventListener('wheel', handleWheel);
+        };
+    }, [setTimelineScale]);
 
     return (
         <div className="timeline-container">
@@ -183,7 +201,7 @@ export const Timeline = () => {
                     />
                 </div>
             </div>
-            <div className="timeline-scroll-area">
+            <div className="timeline-scroll-area" ref={scrollAreaRef}>
                 <div 
                     className="timeline-content" 
                     id="timeline-content" 
