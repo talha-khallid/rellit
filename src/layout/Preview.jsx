@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 'react';
 import { EditorContext } from '../context/EditorContext';
 
-export const Preview = ({ setScrollBox, setCharsData }) => {
+export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const { 
         segments, visualLines, setVisualLines, 
         lineSettings, updateLineSettings,
@@ -15,7 +15,9 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         timelineScale,
         getAudioCtx, AudioBufferPlayer,
         videoBgColor, videoAlignPercent,
-        fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing
+        fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing,
+        customComponents, setCustomComponents, setSegments,
+        armedComponentId, setArmedComponentId
     } = useContext(EditorContext);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -51,6 +53,76 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
         setIsFullscreen(!isFullscreen);
     };
 
+    // Global Paste handler for components
+    useEffect(() => {
+        const handleGlobalPaste = (e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            
+            let imageItem = null;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    imageItem = items[i];
+                    break;
+                }
+            }
+            if (!imageItem) return;
+
+            const blob = imageItem.getAsFile();
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const src = evt.target.result;
+                const newCompId = `comp_${Date.now()}`;
+                
+                setCustomComponents(prev => [...prev, {
+                    id: newCompId,
+                    src,
+                    size: 40,
+                    animation: 'pop-rotate'
+                }]);
+
+                // Determine insertion text segment
+                let targetSegIndex = -1;
+                let newText = '';
+                
+                if (currentSelectionCharIds.length > 0) {
+                    // Find which segment has the selected character
+                    const selectedCharId = currentSelectionCharIds[0];
+                    const selectedWord = renderedWords.find(w => !w.isComponent && (w.chars.some(c => c.id === selectedCharId) || w.spaceId === selectedCharId));
+                    if (selectedWord) {
+                        targetSegIndex = selectedWord.segIndex;
+                        const wordIdx = renderedWords.indexOf(selectedWord);
+                        const wordsInSeg = renderedWords.filter(w => w.segIndex === targetSegIndex);
+                        
+                        // Reconstruct text up to the word
+                        const localWordIdx = wordsInSeg.indexOf(selectedWord);
+                        const textBefore = wordsInSeg.slice(0, localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
+                        const textAfter = wordsInSeg.slice(localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
+                        
+                        newText = textBefore + ` [COMP:${newCompId}] ` + textAfter;
+                    }
+                }
+                
+                if (targetSegIndex === -1 && visualLines[currentLineIndex]) {
+                    // Append to the first segment of the active line if no word selected
+                    targetSegIndex = visualLines[currentLineIndex][0].segIndex;
+                    newText = segments[targetSegIndex].text + ` [COMP:${newCompId}]`;
+                }
+
+                if (targetSegIndex !== -1) {
+                    const newSegments = [...segments];
+                    newSegments[targetSegIndex] = { ...newSegments[targetSegIndex], text: newText.replace(/  +/g, ' ').trim() };
+                    setSegments(newSegments);
+                }
+            };
+            reader.readAsDataURL(blob);
+        };
+        
+        // Add to document
+        document.addEventListener('paste', handleGlobalPaste);
+        return () => document.removeEventListener('paste', handleGlobalPaste);
+    }, [segments, currentLineIndex, currentSelectionCharIds, renderedWords, visualLines, setCustomComponents, setSegments]);
+
     useEffect(() => {
         const words = [];
         let globalCharIndex = 0;
@@ -78,16 +150,28 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
             const timePerWord = parseFloat(seg.duration) / parsedWords.length;
             
             parsedWords.forEach((pw, wordIndex) => {
-                const chars = pw.text.split('').map(char => ({ char, id: globalCharIndex++ }));
-                
-                words.push({
-                    chars,
-                    spaceId: globalCharIndex++,
-                    baseDuration: timePerWord,
-                    segIndex,
-                    isLastInSeg: wordIndex === parsedWords.length - 1,
-                    hasNewlineAfter: pw.hasNewlineAfter
-                });
+                const compMatch = pw.text.match(/^\[COMP:(comp_[0-9]+)\]$/);
+                if (compMatch) {
+                    words.push({
+                        isComponent: true,
+                        componentId: compMatch[1],
+                        baseDuration: timePerWord,
+                        segIndex,
+                        isLastInSeg: wordIndex === parsedWords.length - 1,
+                        hasNewlineAfter: pw.hasNewlineAfter,
+                        spaceId: globalCharIndex++
+                    });
+                } else {
+                    const chars = pw.text.split('').map(char => ({ char, id: globalCharIndex++ }));
+                    words.push({
+                        chars,
+                        spaceId: globalCharIndex++,
+                        baseDuration: timePerWord,
+                        segIndex,
+                        isLastInSeg: wordIndex === parsedWords.length - 1,
+                        hasNewlineAfter: pw.hasNewlineAfter
+                    });
+                }
             });
         });
         
@@ -112,7 +196,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
             
             wordSpans.forEach(span => {
                 const offsetTop = span.offsetTop;
-                if (currentOffsetTop === -1 || Math.abs(offsetTop - currentOffsetTop) > 5) {
+                if (currentOffsetTop === -1 || Math.abs(offsetTop - currentOffsetTop) > Math.max(10, fontSize * 0.5)) {
                     if (currentLine.length > 0) newVisualLines.push(currentLine);
                     currentLine = [{
                         el: span,
@@ -449,7 +533,40 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
             };
         });
 
+        const imgEls = Array.from(trackEl.querySelectorAll('.inline-component'));
+
+        const imagesData = imgEls.map((img) => {
+            const rect = img.getBoundingClientRect();
+            const wordSpan = img.closest('.word');
+            
+            let scale = 1;
+            const match = img.style.transform.match(/scale\(([\d.]+)\)/);
+            if (match) {
+                scale = parseFloat(match[1]);
+            }
+            
+            const trueWidth = parseInt(img.style.width) || (rect.width / scale);
+            const trueHeight = parseInt(img.style.height) || (rect.height / scale);
+            
+            const centerX = rect.left + (rect.width / 2);
+            const centerY = rect.top + (rect.height / 2);
+            
+            const baseX = centerX - (trueWidth / 2) - screenRect.left;
+            const baseY = centerY - (trueHeight / 2) - screenRect.top;
+
+            return {
+                src: img.src,
+                baseX,
+                baseY,
+                width: trueWidth,
+                height: trueHeight,
+                lineIdx: wordToLineIdx.get(wordSpan),
+                animation: img.dataset.animation || 'none'
+            };
+        });
+
         setCharsData(charsData);
+        if (setImagesData) setImagesData(imagesData);
 
         screenEl.style.cssText = originalCssText;
         if (wrapperEl) wrapperEl.style.cssText = originalWrapperCss;
@@ -545,8 +662,26 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                     background: '#000000'
                 }}
             >
+                {/* Custom Global Cursor for Armed Component */}
+                {armedComponentId && (
+                    <div id="preview-armed-cursor" style={{
+                        position: 'fixed', pointerEvents: 'none', zIndex: 999999,
+                        width: 14, height: 14, borderRadius: '50%', background: 'var(--accent)',
+                        border: '2px solid #fff', boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                        transform: 'translate(10px, 10px)'
+                    }}></div>
+                )}
                 <div 
                     className="mobile-screen-container" 
+                    onMouseMove={(e) => {
+                        if (armedComponentId) {
+                            const dot = document.getElementById('preview-armed-cursor');
+                            if (dot) {
+                                dot.style.left = `${e.clientX}px`;
+                                dot.style.top = `${e.clientY}px`;
+                            }
+                        }
+                    }}
                     style={{ 
                         position: 'relative', 
                         height: '100%',
@@ -615,18 +750,95 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
 
                                         return (
                                             <React.Fragment key={wIdx}>
-                                                <span 
-                                                    className={`word ${active ? 'active-word' : ''}`}
-                                                    data-seg-index={word.segIndex}
-                                                    data-base-duration={word.baseDuration}
-                                                    data-word-idx={wIdx}
-                                                    style={{ 
-                                                        display: 'inline', 
-                                                        pointerEvents: isSelectable ? 'auto' : 'none',
-                                                        userSelect: isSelectable ? 'text' : 'none',
-                                                        WebkitUserSelect: isSelectable ? 'text' : 'none'
-                                                    }}
-                                                >
+                                                {word.isComponent ? (
+                                                    <span 
+                                                        className={`word ${active ? 'active-word' : ''} inline-comp-span`}
+                                                        data-seg-index={word.segIndex}
+                                                        data-base-duration={word.baseDuration}
+                                                        data-word-idx={wIdx}
+                                                        style={{ 
+                                                            display: 'inline-block', 
+                                                            pointerEvents: isSelectable ? 'auto' : 'none',
+                                                            verticalAlign: 'middle',
+                                                            margin: '0 4px'
+                                                        }}
+                                                    >
+                                                        {(() => {
+                                                            const comp = customComponents.find(c => c.id === word.componentId);
+                                                            if (!comp) return null;
+                                                            return (
+                                                                <img 
+                                                                    src={comp.src} 
+                                                                    alt="comp" 
+                                                                    className={`inline-component ${active ? `anim-${comp.animation}` : ''}`}
+                                                                    data-animation={comp.animation}
+                                                                    style={{ 
+                                                                        width: comp.size, height: comp.size, objectFit: 'contain',
+                                                                        opacity: active ? 1 : 0,
+                                                                        transform: active ? 'scale(1)' : 'scale(0.8)',
+                                                                        transition: 'opacity 0.2s ease, transform 0.2s ease'
+                                                                    }}
+                                                                />
+                                                            );
+                                                        })()}
+                                                        {(() => {
+                                                            const spaceIsSelected = currentSelectionCharIds.includes(word.spaceId);
+                                                            const spaceColor = charOverrides[word.spaceId] || (active ? lineSettings[currentLineIndex]?.color : undefined) || '#ffffff';
+                                                            const spaceTextColor = spaceIsSelected && !selectionHasUniformOverride ? '#000' : (active ? spaceColor : '#3d3d3d');
+                                                            const spaceBgColor = spaceIsSelected && !selectionHasUniformOverride ? '#fff' : (spaceIsSelected ? 'rgba(255, 255, 255, 0.16)' : 'transparent');
+                                                            
+                                                            return (
+                                                                <span 
+                                                                    className={`char space ${spaceIsSelected ? 'edit-active' : ''}`}
+                                                                    data-char-id={word.spaceId}
+                                                                    data-override-color={charOverrides[word.spaceId]}
+                                                                    style={{
+                                                                        display: 'inline', fontWeight: fontWeight, transition: 'color 0.1s ease, text-shadow 0.1s ease, background-color 0.1s ease',
+                                                                        color: spaceTextColor,
+                                                                        textShadow: active && !spaceIsSelected ? `0 0 1px ${spaceColor}` : '',
+                                                                        backgroundColor: spaceBgColor,
+                                                                        borderRadius: spaceIsSelected ? 2 : 0
+                                                                    }}
+                                                                >
+                                                                    {' '}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </span>
+                                                ) : (
+                                                    <span 
+                                                        className={`word ${active ? 'active-word' : ''}`}
+                                                        data-seg-index={word.segIndex}
+                                                        data-base-duration={word.baseDuration}
+                                                        data-word-idx={wIdx}
+                                                        style={{ 
+                                                            display: 'inline', 
+                                                            pointerEvents: isSelectable || armedComponentId ? 'auto' : 'none',
+                                                            userSelect: isSelectable && !armedComponentId ? 'text' : 'none',
+                                                            WebkitUserSelect: isSelectable && !armedComponentId ? 'text' : 'none',
+                                                            cursor: armedComponentId ? 'crosshair' : 'auto'
+                                                        }}
+                                                        onMouseUp={() => {
+                                                            if (armedComponentId && active) {
+                                                                const targetSegIndex = word.segIndex;
+                                                                const wordsInSeg = renderedWords.filter(w => w.segIndex === targetSegIndex);
+                                                                const localWordIdx = wordsInSeg.indexOf(word);
+                                                                
+                                                                const textBefore = wordsInSeg.slice(0, localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
+                                                                const textAfter = wordsInSeg.slice(localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
+                                                                
+                                                                const newText = textBefore + ` [COMP:${armedComponentId}] ` + textAfter;
+                                                                
+                                                                const newSegments = [...segments];
+                                                                newSegments[targetSegIndex] = { ...newSegments[targetSegIndex], text: newText.replace(/  +/g, ' ').trim() };
+                                                                setSegments(newSegments);
+                                                                setArmedComponentId(null);
+                                                                
+                                                                window.getSelection().removeAllRanges();
+                                                                setCurrentSelectionCharIds([]);
+                                                            }
+                                                        }}
+                                                    >
                                                     {word.chars.map(c => {
                                                         const color = charOverrides[c.id] || (active ? lineSettings[currentLineIndex]?.color : undefined) || '#ffffff';
                                                         const isSelected = currentSelectionCharIds.includes(c.id);
@@ -677,6 +889,7 @@ export const Preview = ({ setScrollBox, setCharsData }) => {
                                                         );
                                                     })()}
                                                 </span>
+                                                )}
                                                 {(word.isLastInSeg || word.hasNewlineAfter) && wIdx !== renderedWords.length - 1 && <div style={{ flexBasis: '100%', height: 0 }}></div>}
                                             </React.Fragment>
                                         );

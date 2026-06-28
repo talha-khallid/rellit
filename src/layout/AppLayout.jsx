@@ -11,6 +11,7 @@ export const AppLayout = () => {
     // which is triggered in SidebarLeft, but populated by Preview.
     const [scrollBox, setScrollBox] = useState({ x: 0, y: 0, w: 0, h: 0 });
     const [charsData, setCharsData] = useState([]);
+    const [imagesData, setImagesData] = useState([]);
 
     const { togglePlayback } = useContext(EditorContext);
 
@@ -31,10 +32,10 @@ export const AppLayout = () => {
 
     return (
         <div className="app-container">
-            <Topbar scrollBox={scrollBox} charsData={charsData} />
+            <Topbar scrollBox={scrollBox} charsData={charsData} imagesData={imagesData} />
             <div className="main-workspace">
                 <SidebarLeft scrollBox={scrollBox} charsData={charsData} />
-                <Preview setScrollBox={setScrollBox} setCharsData={setCharsData} />
+                <Preview setScrollBox={setScrollBox} setCharsData={setCharsData} setImagesData={setImagesData} />
                 <SidebarRight />
             </div>
             <Timeline />

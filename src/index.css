@@ -987,3 +987,66 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
     background: rgba(255,255,255,0.01);
 }
 
+
+/* --- Topbar Tabs --- */
+.top-bar-left {
+    display: flex;
+    align-items: center;
+}
+.top-bar-tabs {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+.tab-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+.tab-btn:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.05);
+}
+.tab-btn.active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* --- Inline Component Animations --- */
+.inline-component {
+    will-change: transform, opacity;
+}
+
+.anim-pop-rotate {
+    animation: popRotate 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes popRotate {
+    0% { transform: scale(0.5) rotate(-15deg); opacity: 0; }
+    50% { transform: scale(1.1) rotate(5deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.anim-pop {
+    animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes popUp {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.anim-fade {
+    animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes fadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+}

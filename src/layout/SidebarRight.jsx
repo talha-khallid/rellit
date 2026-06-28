@@ -8,7 +8,8 @@ export const SidebarRight = () => {
         visualLines, lineSettings, updateLineSettings,
         isPlaying, currentLineIndex, 
         currentSelectionCharIds, setCurrentSelectionCharIds,
-        charOverrides, setCharOverrides
+        charOverrides, setCharOverrides,
+        customComponents, setCustomComponents
     } = useContext(EditorContext);
 
     const hasSelection = currentSelectionCharIds.length > 0;
@@ -124,6 +125,28 @@ export const SidebarRight = () => {
         updateLineSettings(visualLines, newSettings, segments);
     };
 
+    const activeLineComponents = [];
+    if (segText) {
+        const matches = segText.matchAll(/\[COMP:(comp_[0-9]+)\]/g);
+        for (const match of matches) {
+            const compId = match[1];
+            const comp = customComponents.find(c => c.id === compId);
+            if (comp && !activeLineComponents.find(c => c.id === compId)) {
+                activeLineComponents.push(comp);
+            }
+        }
+    }
+
+    const updateComponentProp = (id, prop, value) => {
+        const newComps = customComponents.map(c => c.id === id ? { ...c, [prop]: value } : c);
+        setCustomComponents(newComps);
+    };
+
+    const removeComponent = (id) => {
+        const newText = segText.replace(new RegExp(`\\s*\\[COMP:${id}\\]\\s*`, 'g'), ' ').replace(/  +/g, ' ').trim();
+        updateSegmentText(newText);
+    };
+
     return (
         <div className="sidebar right-sidebar">
             <h2>Inspector</h2>
@@ -134,8 +157,46 @@ export const SidebarRight = () => {
                 
                 <div className="prop-group" style={{ marginBottom: 24 }}>
                     <label>Text Content <span style={{ opacity: 0.4, fontWeight: 400 }}>(Segment {segIndex + 1})</span></label>
-                    <textarea rows="4" disabled={isPlaying} value={segText} onChange={(e) => updateSegmentText(e.target.value)}></textarea>
+                    <textarea 
+                        rows="4" 
+                        disabled={isPlaying} 
+                        value={segText} 
+                        onChange={(e) => updateSegmentText(e.target.value)}
+                    ></textarea>
                 </div>
+
+                {activeLineComponents.length > 0 && (
+                    <div className="prop-group" style={{ marginBottom: 24, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+                        <label>Inline Components on Line {currentLineIndex + 1}</label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                            {activeLineComponents.map(comp => (
+                                <div key={comp.id} style={{ 
+                                    background: 'var(--bg-input)', padding: '12px', borderRadius: '8px', 
+                                    border: '1px solid var(--border)', display: 'flex', gap: 12, alignItems: 'center'
+                                }}>
+                                    <div style={{ width: 40, height: 40, flexShrink: 0, background: 'var(--bg)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <img src={comp.src} alt="comp" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                                    </div>
+                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>ID: {comp.id.substring(5)}</span>
+                                            <button className="btn-ghost" style={{ padding: '2px 6px', fontSize: 10, color: '#ff4444' }} onClick={() => removeComponent(comp.id)}>Remove</button>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 8 }}>
+                                            <input type="number" className="panel-input" value={comp.size} onChange={e => updateComponentProp(comp.id, 'size', parseInt(e.target.value) || 40)} style={{ width: 50, padding: '4px 6px', fontSize: 11 }} title="Size (px)" />
+                                            <select className="panel-select" value={comp.animation} onChange={e => updateComponentProp(comp.id, 'animation', e.target.value)} style={{ padding: '4px 6px', fontSize: 11, flex: 1 }}>
+                                                <option value="pop-rotate">Pop & Rotate</option>
+                                                <option value="pop">Pop Up</option>
+                                                <option value="fade">Fade In</option>
+                                                <option value="none">None</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div className="prop-group" style={{ marginBottom: 24 }}>
                     <label>Duration (s)</label>

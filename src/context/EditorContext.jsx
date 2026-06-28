@@ -91,6 +91,11 @@ export const EditorProvider = ({ children }) => {
     const [textAlign, setTextAlign] = useState('left');
     const [letterSpacing, setLetterSpacing] = useState(0);
 
+    // Sidebar & Components State
+    const [activeTab, setActiveTab] = useState('video-settings');
+    const [customComponents, setCustomComponents] = useState([]);
+    const [armedComponentId, setArmedComponentId] = useState(null);
+
     // Sync from localStorage or default
     useEffect(() => {
         fetch('/captions.json')
@@ -211,7 +216,10 @@ export const EditorProvider = ({ children }) => {
         textTransform, setTextTransform,
         fontSize, setFontSize,
         textAlign, setTextAlign,
-        letterSpacing, setLetterSpacing
+        letterSpacing, setLetterSpacing,
+        activeTab, setActiveTab,
+        customComponents, setCustomComponents,
+        armedComponentId, setArmedComponentId
     };
 
     return (

@@ -1,6 +1,7 @@
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { CustomColorPicker } from '../components/CustomColorPicker';
+import { ComponentCreator } from '../components/ComponentCreator';
 
 // --- Dynamic Waveform Component ---
 const Waveform = ({ audioBuffer }) => {
@@ -67,7 +68,8 @@ export const SidebarLeft = () => {
         textTransform, setTextTransform,
         fontSize, setFontSize,
         textAlign, setTextAlign,
-        letterSpacing, setLetterSpacing
+        letterSpacing, setLetterSpacing,
+        activeTab
     } = useContext(EditorContext);
 
     const renderTypographySettings = () => (
@@ -129,7 +131,6 @@ export const SidebarLeft = () => {
         </div>
     );
 
-    const [activeTab, setActiveTab] = useState('media');
     const [newText, setNewText] = useState('');
     const [newDuration, setNewDuration] = useState('05');
     const [newAudioFile, setNewAudioFile] = useState(null);
@@ -313,7 +314,7 @@ export const SidebarLeft = () => {
                             })}
                         </div>
                     </>
-                ) : (
+                ) : activeTab === 'video-settings' ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                         <div>
                             <span className="context-label" style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, display: 'block', fontWeight: 500 }}>Canvas Settings</span>
@@ -345,12 +346,9 @@ export const SidebarLeft = () => {
 
                         {renderTypographySettings()}
                     </div>
-                )}
-            </div>
-
-            <div className="sidebar-tabs">
-                <button className={`sidebar-tab-btn ${activeTab === 'media' ? 'active' : ''}`} onClick={() => setActiveTab('media')}>Media</button>
-                <button className={`sidebar-tab-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>Video Settings</button>
+                ) : activeTab === 'components' ? (
+                    <ComponentCreator />
+                ) : null}
             </div>
         </div>
     );

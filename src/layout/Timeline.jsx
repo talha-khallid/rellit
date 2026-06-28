@@ -48,7 +48,7 @@ export const Timeline = () => {
     let timeAccumulator = 0;
     const lineBlocks = visualLines.map((line, i) => {
         const dur = parseFloat(lineSettings[i]?.duration || 0.1);
-        const text = line.map(span => span.el.textContent).join(' ');
+        const text = line.map(span => span.el ? span.el.textContent : '').join(' ');
         const block = {
             index: i,
             start: timeAccumulator,
@@ -57,6 +57,28 @@ export const Timeline = () => {
         };
         timeAccumulator += dur;
         return block;
+    });
+
+    const componentMarkers = [];
+    visualLines.forEach((line, i) => {
+        const compSpans = line.filter(span => span.el && span.el.classList.contains('inline-comp-span'));
+        compSpans.forEach(span => {
+            const img = span.el.querySelector('img');
+            if (img) {
+                // Determine exact time offset within the line based on word index? 
+                // For simplicity, we just put it at the line start + a small offset based on index.
+                const wordIdx = parseInt(span.el.dataset.wordIdx || 0);
+                const lineTotalWords = line.length;
+                const offsetDur = lineTotalWords > 0 ? (wordIdx / lineTotalWords) * lineBlocks[i].duration : 0;
+                
+                componentMarkers.push({
+                    id: `marker-${i}-${wordIdx}`,
+                    lineIndex: i,
+                    start: lineBlocks[i].start + offsetDur,
+                    src: img.src
+                });
+            }
+        });
     });
 
     let currentSegIdx = -1;
@@ -235,6 +257,39 @@ export const Timeline = () => {
                     </div>
 
                     <div className="tracks-group">
+                        {/* Component Markers Layer */}
+                        {componentMarkers.map(marker => (
+                            <div 
+                                key={marker.id}
+                                style={{
+                                    position: 'absolute',
+                                    left: marker.start * timelineScale,
+                                    top: -30,
+                                    width: 24,
+                                    height: 24,
+                                    transform: 'translateX(-50%)',
+                                    zIndex: 10
+                                }}
+                            >
+                                <div style={{
+                                    width: '100%', height: '100%', background: 'var(--bg-input)', borderRadius: '4px', border: '1px solid var(--border)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
+                                }}>
+                                    <img src={marker.src} alt="marker" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                                </div>
+                                {/* Connecting string */}
+                                <div style={{
+                                    position: 'absolute',
+                                    left: '50%',
+                                    top: '100%',
+                                    width: 1,
+                                    height: 38, /* Reaches down to the text block */
+                                    background: 'var(--border)',
+                                    transform: 'translateX(-50%)'
+                                }}></div>
+                            </div>
+                        ))}
+
                         <div className="track text-track" data-label="Text Lines">
                             {lineBlocks.map(lb => (
                                 <div 

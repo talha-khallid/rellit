@@ -2,12 +2,13 @@ import React, { useContext, useState } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { exportVideo } from '../utils/exportEngine';
 
-export const Topbar = ({ scrollBox, charsData }) => {
+export const Topbar = ({ scrollBox, charsData, imagesData }) => {
     const { 
         segments, 
         visualLines, lineSettings, 
         isPlaying, togglePlayback,
-        videoBgColor
+        videoBgColor,
+        activeTab, setActiveTab
     } = useContext(EditorContext);
 
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -28,8 +29,13 @@ export const Topbar = ({ scrollBox, charsData }) => {
         setProgressPercent(0);
 
         await exportVideo({
-            segments, visualLines, lineSettings, charsData, 
-            fpsInput: exportFps, scrollBox,
+            segments,
+            visualLines,
+            lineSettings,
+            charsData,
+            imagesData,
+            fpsInput: exportFps,
+            scrollBox,
             videoBgColor,
             setProgress: (text, percent = 0) => {
                 setProgressText(text);
@@ -51,7 +57,22 @@ export const Topbar = ({ scrollBox, charsData }) => {
         <>
             <div className="top-bar">
                 <div className="top-bar-left">
-                    <div style={{ fontWeight: 600, fontSize: 16, color: '#fff', letterSpacing: 0.5 }}>Rellit</div>
+                    <div style={{ fontWeight: 600, fontSize: 16, color: '#fff', letterSpacing: 0.5, marginRight: 24 }}>Rellit</div>
+                    
+                    <div className="top-bar-tabs" style={{ marginLeft: 30 }}>
+                        <button 
+                            className={`tab-btn ${activeTab === 'media' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('media')}
+                        >Media</button>
+                        <button 
+                            className={`tab-btn ${activeTab === 'video-settings' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('video-settings')}
+                        >Video Settings</button>
+                        <button 
+                            className={`tab-btn ${activeTab === 'components' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('components')}
+                        >Components</button>
+                    </div>
                 </div>
                 <div className="top-bar-right">
                     <button className="top-bar-export-btn" onClick={openModal}>

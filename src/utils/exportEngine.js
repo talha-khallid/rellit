@@ -6,6 +6,7 @@ export async function exportVideo({
     visualLines,
     lineSettings,
     charsData,
+    imagesData = [],
     fpsInput,
     scrollBox,
     setProgress,
@@ -100,6 +101,20 @@ export async function exportVideo({
         const bgRgba75 = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.75)`;
         const bgRgba0 = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`;
 
+        // Preload images
+        const preloadedImages = {};
+        for (let imgD of imagesData) {
+            if (!preloadedImages[imgD.src]) {
+                const img = new Image();
+                img.src = imgD.src;
+                await new Promise((resolve) => {
+                    img.onload = resolve;
+                    img.onerror = resolve; // Continue on error to avoid hanging
+                });
+                preloadedImages[imgD.src] = img;
+            }
+        }
+
         let currentTimeMs = 0;
         const frameTimeMs = 1000 / fps;
 
@@ -167,6 +182,41 @@ export async function exportVideo({
 
                 ctx.fillStyle = charColor;
                 ctx.fillText(c.text, c.baseX, c.baseY + currentTranslation);
+            }
+
+            // Draw Images
+            for (let imgD of imagesData) {
+                let isImgActive = (imgD.lineIdx === activeIdx);
+                if (isImgActive) {
+                    const img = preloadedImages[imgD.src];
+                    if (img && img.width) {
+                        ctx.save();
+                        
+                        let scale = 1;
+                        let rotation = 0;
+                        let opacity = 1;
+                        
+                        if (imgD.animation === 'pop-rotate') {
+                            scale = 0.8 + (0.2 * colorProgress);
+                            rotation = (1 - colorProgress) * -15;
+                        } else if (imgD.animation === 'pop') {
+                            scale = 0.8 + (0.2 * colorProgress);
+                        } else if (imgD.animation === 'fade') {
+                            opacity = colorProgress;
+                        }
+                        
+                        ctx.globalAlpha = opacity;
+                        const centerX = imgD.baseX + (imgD.width / 2);
+                        const centerY = imgD.baseY + currentTranslation + (imgD.height / 2);
+                        
+                        ctx.translate(centerX, centerY);
+                        if (rotation !== 0) ctx.rotate(rotation * Math.PI / 180);
+                        if (scale !== 1) ctx.scale(scale, scale);
+                        
+                        ctx.drawImage(img, -imgD.width / 2, -imgD.height / 2, imgD.width, imgD.height);
+                        ctx.restore();
+                    }
+                }
             }
 
             ctx.shadowBlur = 0;
