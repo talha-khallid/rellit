@@ -4,7 +4,7 @@ import { EditorContext } from '../context/EditorContext';
 export const ComponentCreator = () => {
     const { customComponents, setCustomComponents, armedComponentId, setArmedComponentId } = useContext(EditorContext);
     const [imageSrc, setImageSrc] = useState(null);
-    const [size, setSize] = useState(40);
+    const [size, setSize] = useState(60);
     const [animation, setAnimation] = useState('scale-rotate-left');
     const fileInputRef = useRef(null);
 
@@ -86,7 +86,7 @@ export const ComponentCreator = () => {
                     type="number" 
                     className="panel-input" 
                     value={size} 
-                    onChange={(e) => setSize(parseInt(e.target.value) || 40)} 
+                    onChange={(e) => setSize(parseInt(e.target.value) || 60)} 
                 />
             </div>
 

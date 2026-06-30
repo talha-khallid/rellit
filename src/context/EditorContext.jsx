@@ -87,7 +87,7 @@ export const EditorProvider = ({ children }) => {
     const [fontFamily, setFontFamily] = useState('Inter, sans-serif');
     const [fontWeight, setFontWeight] = useState(500);
     const [textTransform, setTextTransform] = useState('none');
-    const [fontSize, setFontSize] = useState(43.5);
+    const [fontSize, setFontSize] = useState(45);
     const [textAlign, setTextAlign] = useState('left');
     const [letterSpacing, setLetterSpacing] = useState(0);
 

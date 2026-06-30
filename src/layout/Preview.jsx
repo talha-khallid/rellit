@@ -99,14 +99,14 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                         const textBefore = wordsInSeg.slice(0, localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
                         const textAfter = wordsInSeg.slice(localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
                         
-                        newText = textBefore + ` [COMP:${newCompId}] ` + textAfter;
+                        newText = textBefore + ` [COMP:${newCompId}]  ` + textAfter;
                     }
                 }
                 
                 if (targetSegIndex === -1 && visualLines[currentLineIndex]) {
                     // Append to the first segment of the active line if no word selected
                     targetSegIndex = visualLines[currentLineIndex][0].segIndex;
-                    newText = segments[targetSegIndex].text + ` [COMP:${newCompId}]`;
+                    newText = segments[targetSegIndex].text + ` [COMP:${newCompId}]  `;
                 }
 
                 if (targetSegIndex !== -1) {
@@ -811,14 +811,14 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                             display: 'inline-block', 
                                                             pointerEvents: isSelectable ? 'auto' : 'none',
                                                             verticalAlign: 'middle',
-                                                            margin: 0
+                                                            margin: '-5px 0'
                                                         }}
                                                     >
                                                         {(() => {
                                                             const comp = customComponents.find(c => c.id === word.componentId);
                                                             if (!comp) return null;
                                                             return (
-                                                                <span style={{ display: 'inline-block', transform: `translate(${comp.offsetX || 0}px, ${comp.offsetY || 0}px)` }}>
+                                                                <span style={{ display: 'inline-block', transform: `translate(${comp.offsetX || 0}px, ${(comp.offsetY || 0) - 5}px)` }}>
                                                                     <img 
                                                                         src={comp.src} 
                                                                         alt="comp" 
@@ -880,7 +880,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                                 const textBefore = wordsInSeg.slice(0, localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
                                                                 const textAfter = wordsInSeg.slice(localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
                                                                 
-                                                                const newText = textBefore + ` [COMP:${armedComponentId}] ` + textAfter;
+                                                                const newText = textBefore + ` [COMP:${armedComponentId}]  ` + textAfter;
                                                                 
                                                                 const newSegments = [...segments];
                                                                 newSegments[targetSegIndex] = { ...newSegments[targetSegIndex], text: newText.trim() };

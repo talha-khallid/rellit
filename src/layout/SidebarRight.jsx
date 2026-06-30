@@ -183,7 +183,7 @@ export const SidebarRight = () => {
                                             <button className="btn-ghost" style={{ padding: '2px 6px', fontSize: 10, color: '#ff4444' }} onClick={() => removeComponent(comp.id)}>Remove</button>
                                         </div>
                                         <div style={{ display: 'flex', gap: 8 }}>
-                                            <input type="number" className="panel-input" value={comp.size} onChange={e => updateComponentProp(comp.id, 'size', parseInt(e.target.value) || 40)} style={{ width: 50, padding: '4px 6px', fontSize: 11 }} title="Size (px)" />
+                                            <input type="number" className="panel-input" value={comp.size} onChange={e => updateComponentProp(comp.id, 'size', parseInt(e.target.value) || 60)} style={{ width: 50, padding: '4px 6px', fontSize: 11 }} title="Size (px)" />
                                             <select className="panel-select" value={comp.animation} onChange={e => updateComponentProp(comp.id, 'animation', e.target.value)} style={{ padding: '4px 6px', fontSize: 11, flex: 1 }}>
                                                 <option value="scale-rotate-left">Scale & Rotate Left (Smooth)</option>
                                                 <option value="scale-rotate-right">Scale & Rotate Right (Smooth)</option>
