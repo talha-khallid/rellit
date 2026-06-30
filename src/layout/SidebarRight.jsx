@@ -185,11 +185,26 @@ export const SidebarRight = () => {
                                         <div style={{ display: 'flex', gap: 8 }}>
                                             <input type="number" className="panel-input" value={comp.size} onChange={e => updateComponentProp(comp.id, 'size', parseInt(e.target.value) || 40)} style={{ width: 50, padding: '4px 6px', fontSize: 11 }} title="Size (px)" />
                                             <select className="panel-select" value={comp.animation} onChange={e => updateComponentProp(comp.id, 'animation', e.target.value)} style={{ padding: '4px 6px', fontSize: 11, flex: 1 }}>
-                                                <option value="pop-rotate">Pop & Rotate</option>
-                                                <option value="pop">Pop Up</option>
+                                                <option value="scale-rotate-left">Scale & Rotate Left (Smooth)</option>
+                                                <option value="scale-rotate-right">Scale & Rotate Right (Smooth)</option>
+                                                <option value="scale">Scale In</option>
+                                                <option value="bounce-rotate">Bounce & Rotate</option>
+                                                <option value="slide-up">Slide Up</option>
+                                                <option value="slide-down">Slide Down</option>
+                                                <option value="spin-in">Spin In</option>
                                                 <option value="fade">Fade In</option>
                                                 <option value="none">None</option>
                                             </select>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 8 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>X Offset</span>
+                                                <input type="number" className="panel-input" value={comp.offsetX || 0} onChange={e => updateComponentProp(comp.id, 'offsetX', parseInt(e.target.value) || 0)} style={{ width: 50, padding: '4px 6px', fontSize: 11 }} title="Horizontal Offset (px)" />
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Y Offset</span>
+                                                <input type="number" className="panel-input" value={comp.offsetY || 0} onChange={e => updateComponentProp(comp.id, 'offsetY', parseInt(e.target.value) || 0)} style={{ width: 50, padding: '4px 6px', fontSize: 11 }} title="Vertical Offset (px)" />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

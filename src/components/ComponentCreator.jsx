@@ -5,7 +5,7 @@ export const ComponentCreator = () => {
     const { customComponents, setCustomComponents, armedComponentId, setArmedComponentId } = useContext(EditorContext);
     const [imageSrc, setImageSrc] = useState(null);
     const [size, setSize] = useState(40);
-    const [animation, setAnimation] = useState('pop-rotate');
+    const [animation, setAnimation] = useState('scale-rotate-left');
     const fileInputRef = useRef(null);
 
     const handleFileUpload = (e) => {
@@ -88,16 +88,6 @@ export const ComponentCreator = () => {
                     value={size} 
                     onChange={(e) => setSize(parseInt(e.target.value) || 40)} 
                 />
-            </div>
-
-            <div className="prop-group">
-                <label>Animation Entrance</label>
-                <select className="panel-select" value={animation} onChange={(e) => setAnimation(e.target.value)}>
-                    <option value="pop-rotate">Pop & Rotate</option>
-                    <option value="pop">Pop Up</option>
-                    <option value="fade">Fade In</option>
-                    <option value="none">None</option>
-                </select>
             </div>
 
             <button className="btn-primary" onClick={handleAdd} disabled={!imageSrc}>

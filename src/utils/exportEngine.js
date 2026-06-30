@@ -195,21 +195,82 @@ export async function exportVideo({
                         let scale = 1;
                         let rotation = 0;
                         let opacity = 1;
+                        let translateY = 0;
                         
-                        if (imgD.animation === 'pop-rotate') {
-                            scale = 0.8 + (0.2 * colorProgress);
-                            rotation = (1 - colorProgress) * -15;
+                        // Animations have different durations, calculate local progress for each
+                        if (imgD.animation === 'pop-rotate' || imgD.animation === 'scale-rotate-left') {
+                            const p = Math.min(timeInLineMs / 500, 1.0);
+                            if (p < 0.5) {
+                                const subP = p / 0.5;
+                                scale = subP;
+                                rotation = 0;
+                                opacity = subP;
+                            } else {
+                                const subP = (p - 0.5) / 0.5;
+                                scale = 1;
+                                rotation = -15 * subP;
+                                opacity = 1;
+                            }
+                        } else if (imgD.animation === 'pop-rotate-right' || imgD.animation === 'scale-rotate-right') {
+                            const p = Math.min(timeInLineMs / 500, 1.0);
+                            if (p < 0.5) {
+                                const subP = p / 0.5;
+                                scale = subP;
+                                rotation = 0;
+                                opacity = subP;
+                            } else {
+                                const subP = (p - 0.5) / 0.5;
+                                scale = 1;
+                                rotation = 15 * subP;
+                                opacity = 1;
+                            }
                         } else if (imgD.animation === 'pop') {
-                            scale = 0.8 + (0.2 * colorProgress);
+                            const p = Math.min(timeInLineMs / 300, 1.0);
+                            scale = 0.5 + (0.5 * p);
+                            opacity = p;
+                        } else if (imgD.animation === 'scale') {
+                            const p = Math.min(timeInLineMs / 300, 1.0);
+                            scale = p;
+                            opacity = p;
+                        } else if (imgD.animation === 'bounce-rotate') {
+                            const p = Math.min(timeInLineMs / 500, 1.0);
+                            if (p < 0.6) {
+                                // 0 to 60%
+                                const subP = p / 0.6;
+                                // simple bezier approximation for overshoot
+                                scale = subP * 1.15;
+                                rotation = -45 + (55 * subP);
+                                opacity = subP;
+                            } else {
+                                // 60% to 100%
+                                const subP = (p - 0.6) / 0.4;
+                                scale = 1.15 - (0.15 * subP);
+                                rotation = 10 - (10 * subP);
+                                opacity = 1;
+                            }
+                        } else if (imgD.animation === 'slide-up') {
+                            const p = Math.min(timeInLineMs / 300, 1.0);
+                            translateY = 15 - (15 * p);
+                            opacity = p;
+                        } else if (imgD.animation === 'slide-down') {
+                            const p = Math.min(timeInLineMs / 300, 1.0);
+                            translateY = -15 + (15 * p);
+                            opacity = p;
+                        } else if (imgD.animation === 'spin-in') {
+                            const p = Math.min(timeInLineMs / 400, 1.0);
+                            scale = p;
+                            rotation = -180 + (180 * p);
+                            opacity = p;
                         } else if (imgD.animation === 'fade') {
-                            opacity = colorProgress;
+                            const p = Math.min(timeInLineMs / 300, 1.0);
+                            opacity = p;
                         }
                         
                         ctx.globalAlpha = opacity;
                         const centerX = imgD.baseX + (imgD.width / 2);
                         const centerY = imgD.baseY + currentTranslation + (imgD.height / 2);
                         
-                        ctx.translate(centerX, centerY);
+                        ctx.translate(centerX, centerY + translateY);
                         if (rotation !== 0) ctx.rotate(rotation * Math.PI / 180);
                         if (scale !== 1) ctx.scale(scale, scale);
                         

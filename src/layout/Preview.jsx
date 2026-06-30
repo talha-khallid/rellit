@@ -597,7 +597,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
             setTimeout(captureExportGeometry, 40);
         }
         // eslint-disable-next-line
-    }, [visualLines, charOverrides, lineSettings, screenScale, videoBgColor, videoAlignPercent, fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing]);
+    }, [visualLines, charOverrides, lineSettings, screenScale, videoBgColor, videoAlignPercent, fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing, customComponents]);
 
     useEffect(() => {
         const handleSelection = () => {
@@ -818,18 +818,20 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                             const comp = customComponents.find(c => c.id === word.componentId);
                                                             if (!comp) return null;
                                                             return (
-                                                                <img 
-                                                                    src={comp.src} 
-                                                                    alt="comp" 
-                                                                    className={`inline-component ${active ? `anim-${comp.animation}` : ''}`}
-                                                                    data-animation={comp.animation}
-                                                                    style={{ 
-                                                                        width: comp.size, height: comp.size, objectFit: 'contain',
-                                                                        opacity: active ? 1 : 0,
-                                                                        transform: active ? 'scale(1)' : 'scale(0.8)',
-                                                                        transition: 'opacity 0.2s ease, transform 0.2s ease'
-                                                                    }}
-                                                                />
+                                                                <span style={{ display: 'inline-block', transform: `translate(${comp.offsetX || 0}px, ${comp.offsetY || 0}px)` }}>
+                                                                    <img 
+                                                                        src={comp.src} 
+                                                                        alt="comp" 
+                                                                        className={`inline-component ${active ? `anim-${comp.animation}` : ''}`}
+                                                                        data-animation={comp.animation}
+                                                                        style={{ 
+                                                                            width: comp.size, height: comp.size, objectFit: 'contain',
+                                                                            opacity: active ? 1 : 0,
+                                                                            transform: active ? 'scale(1)' : 'scale(0.8)',
+                                                                            transition: 'opacity 0.2s ease, transform 0.2s ease'
+                                                                        }}
+                                                                    />
+                                                                </span>
                                                             );
                                                         })()}
                                                         {(() => {
