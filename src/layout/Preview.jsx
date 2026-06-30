@@ -111,7 +111,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
 
                 if (targetSegIndex !== -1) {
                     const newSegments = [...segments];
-                    newSegments[targetSegIndex] = { ...newSegments[targetSegIndex], text: newText.replace(/  +/g, ' ').trim() };
+                    newSegments[targetSegIndex] = { ...newSegments[targetSegIndex], text: newText.trim() };
                     setSegments(newSegments);
                 }
             };
@@ -132,7 +132,10 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
             const parsedWords = [];
             
             rawTokens.forEach((token) => {
-                if (token === '') return;
+                if (token === '') {
+                    parsedWords.push({ text: '', hasNewlineAfter: false });
+                    return;
+                }
                 const parts = token.split('\n');
                 parts.forEach((part, i) => {
                     if (part !== '') {
@@ -147,7 +150,8 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
 
             if (parsedWords.length === 0) return;
 
-            const timePerWord = parseFloat(seg.duration) / parsedWords.length;
+            const realWordsCount = Math.max(1, parsedWords.filter(pw => pw.text !== '').length);
+            const timePerWord = parseFloat(seg.duration) / realWordsCount;
             
             parsedWords.forEach((pw, wordIndex) => {
                 const compMatch = pw.text.match(/^\[COMP:(comp_[0-9]+)\]$/);
@@ -160,6 +164,15 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                         isLastInSeg: wordIndex === parsedWords.length - 1,
                         hasNewlineAfter: pw.hasNewlineAfter,
                         spaceId: globalCharIndex++
+                    });
+                } else if (pw.text === '') {
+                    words.push({
+                        isExtraSpace: true,
+                        spaceId: globalCharIndex++,
+                        baseDuration: 0,
+                        segIndex,
+                        isLastInSeg: wordIndex === parsedWords.length - 1,
+                        hasNewlineAfter: pw.hasNewlineAfter
                     });
                 } else {
                     const chars = pw.text.split('').map(char => ({ char, id: globalCharIndex++ }));
@@ -750,7 +763,45 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
 
                                         return (
                                             <React.Fragment key={wIdx}>
-                                                {word.isComponent ? (
+                                                {word.isExtraSpace ? (
+                                                    <span 
+                                                        className={`word ${active ? 'active-word' : ''}`}
+                                                        data-seg-index={word.segIndex}
+                                                        data-base-duration={word.baseDuration}
+                                                        data-word-idx={wIdx}
+                                                        style={{ 
+                                                            display: 'inline', 
+                                                            pointerEvents: isSelectable || armedComponentId ? 'auto' : 'none',
+                                                            userSelect: isSelectable && !armedComponentId ? 'text' : 'none',
+                                                            WebkitUserSelect: isSelectable && !armedComponentId ? 'text' : 'none',
+                                                            cursor: armedComponentId ? 'crosshair' : 'auto'
+                                                        }}
+                                                    >
+                                                        {(() => {
+                                                            const spaceIsSelected = currentSelectionCharIds.includes(word.spaceId);
+                                                            const spaceColor = charOverrides[word.spaceId] || (active ? lineSettings[currentLineIndex]?.color : undefined) || '#ffffff';
+                                                            const spaceTextColor = spaceIsSelected && !selectionHasUniformOverride ? '#000' : (active ? spaceColor : '#3d3d3d');
+                                                            const spaceBgColor = spaceIsSelected && !selectionHasUniformOverride ? '#fff' : (spaceIsSelected ? 'rgba(255, 255, 255, 0.16)' : 'transparent');
+                                                            
+                                                            return (
+                                                                <span 
+                                                                    className={`char space ${spaceIsSelected ? 'edit-active' : ''}`}
+                                                                    data-char-id={word.spaceId}
+                                                                    data-override-color={charOverrides[word.spaceId]}
+                                                                    style={{
+                                                                        display: 'inline', fontWeight: fontWeight, transition: 'color 0.1s ease, text-shadow 0.1s ease, background-color 0.1s ease',
+                                                                        color: spaceTextColor,
+                                                                        textShadow: active && !spaceIsSelected ? `0 0 1px ${spaceColor}` : '',
+                                                                        backgroundColor: spaceBgColor,
+                                                                        borderRadius: spaceIsSelected ? 2 : 0
+                                                                    }}
+                                                                >
+{'\u00A0'}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </span>
+                                                ) : word.isComponent ? (
                                                     <span 
                                                         className={`word ${active ? 'active-word' : ''} inline-comp-span`}
                                                         data-seg-index={word.segIndex}
@@ -760,7 +811,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                             display: 'inline-block', 
                                                             pointerEvents: isSelectable ? 'auto' : 'none',
                                                             verticalAlign: 'middle',
-                                                            margin: '0 4px'
+                                                            margin: 0
                                                         }}
                                                     >
                                                         {(() => {
@@ -830,7 +881,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                                 const newText = textBefore + ` [COMP:${armedComponentId}] ` + textAfter;
                                                                 
                                                                 const newSegments = [...segments];
-                                                                newSegments[targetSegIndex] = { ...newSegments[targetSegIndex], text: newText.replace(/  +/g, ' ').trim() };
+                                                                newSegments[targetSegIndex] = { ...newSegments[targetSegIndex], text: newText.trim() };
                                                                 setSegments(newSegments);
                                                                 setArmedComponentId(null);
                                                                 
