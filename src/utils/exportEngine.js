@@ -16,6 +16,12 @@ export async function exportVideo({
 }) {
     const fps = isNaN(fpsInput) ? 60 : Math.max(20, Math.min(60, fpsInput));
 
+    const yieldToMain = () => new Promise(resolve => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = resolve;
+        channel.port2.postMessage(null);
+    });
+
     try {
         let totalDuration = 0;
         for (let i = 0; i < visualLines.length; i++) {
@@ -122,7 +128,7 @@ export async function exportVideo({
             if (frame % 5 === 0) {
                 const percent = Math.round((frame / totalFrames) * 100);
                 setProgress(`Rendering Frame ${frame + 1} / ${totalFrames}`, percent);
-                await new Promise(r => setTimeout(r, 0));
+                await yieldToMain();
             }
 
             let lineStartTimeMs = 0;
@@ -424,7 +430,7 @@ export async function exportVideo({
 
         if (audioEncoder) {
             setProgress("Encoding Audio...", 100);
-            await new Promise(r => setTimeout(r, 0));
+            await yieldToMain();
 
             const chunkFrames = 4096;
             let globalTime = 0;
