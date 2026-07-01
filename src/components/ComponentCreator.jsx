@@ -1,4 +1,4 @@
-import React, { useState, useContext, useRef } from 'react';
+import React, { useState, useContext, useRef, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
 
 export const ComponentCreator = () => {
@@ -6,7 +6,16 @@ export const ComponentCreator = () => {
     const [imageSrc, setImageSrc] = useState(null);
     const [size, setSize] = useState(60);
     const [animation, setAnimation] = useState('scale-rotate-left');
+    const [inactiveBehavior, setInactiveBehavior] = useState('hidden');
     const fileInputRef = useRef(null);
+
+    useEffect(() => {
+        if (inactiveBehavior === 'dimmed' && !animation.startsWith('dim-')) {
+            setAnimation('dim-scale-rotate-left');
+        } else if (inactiveBehavior !== 'dimmed' && animation.startsWith('dim-')) {
+            setAnimation('scale-rotate-left');
+        }
+    }, [inactiveBehavior, animation]);
 
     const handleFileUpload = (e) => {
         const file = e.target.files[0];
@@ -36,7 +45,8 @@ export const ComponentCreator = () => {
             id: `comp_${Date.now()}`,
             src: imageSrc,
             size,
-            animation
+            animation,
+            inactiveBehavior
         };
         setCustomComponents([...customComponents, newComp]);
         setImageSrc(null);
@@ -88,6 +98,42 @@ export const ComponentCreator = () => {
                     value={size} 
                     onChange={(e) => setSize(parseInt(e.target.value) || 60)} 
                 />
+            </div>
+
+            <div className="prop-group">
+                <label>Inactive State Behavior</label>
+                <select className="panel-select" value={inactiveBehavior} onChange={(e) => setInactiveBehavior(e.target.value)}>
+                    <option value="hidden">Hidden (Keep Space)</option>
+                    <option value="collapse">Collapse (Remove Space)</option>
+                    <option value="dimmed">Dimmed (No Rotate)</option>
+                </select>
+            </div>
+
+            <div className="prop-group">
+                <label>Animation</label>
+                <select className="panel-select" value={animation} onChange={(e) => setAnimation(e.target.value)}>
+                    {inactiveBehavior === 'dimmed' ? (
+                        <>
+                            <option value="dim-scale-rotate-left">Dim: Scale & Rotate Left</option>
+                            <option value="dim-scale-rotate-right">Dim: Scale & Rotate Right</option>
+                            <option value="dim-scale">Dim: Scale</option>
+                            <option value="dim-bounce-rotate">Dim: Bounce & Rotate</option>
+                            <option value="none">None</option>
+                        </>
+                    ) : (
+                        <>
+                            <option value="scale-rotate-left">Scale & Rotate Left (Smooth)</option>
+                            <option value="scale-rotate-right">Scale & Rotate Right (Smooth)</option>
+                            <option value="scale">Scale In</option>
+                            <option value="bounce-rotate">Bounce & Rotate</option>
+                            <option value="slide-up">Slide Up</option>
+                            <option value="slide-down">Slide Down</option>
+                            <option value="spin-in">Spin In</option>
+                            <option value="fade">Fade In</option>
+                            <option value="none">None</option>
+                        </>
+                    )}
+                </select>
             </div>
 
             <button className="btn-primary" onClick={handleAdd} disabled={!imageSrc}>

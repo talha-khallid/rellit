@@ -99,14 +99,14 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                         const textBefore = wordsInSeg.slice(0, localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
                         const textAfter = wordsInSeg.slice(localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
                         
-                        newText = textBefore + ` [COMP:${newCompId}]  ` + textAfter;
+                        newText = textBefore + ` [COMP:${newCompId}] ` + textAfter;
                     }
                 }
                 
                 if (targetSegIndex === -1 && visualLines[currentLineIndex]) {
                     // Append to the first segment of the active line if no word selected
                     targetSegIndex = visualLines[currentLineIndex][0].segIndex;
-                    newText = segments[targetSegIndex].text + ` [COMP:${newCompId}]  `;
+                    newText = segments[targetSegIndex].text + ` [COMP:${newCompId}] `;
                 }
 
                 if (targetSegIndex !== -1) {
@@ -548,6 +548,16 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
 
         const imgEls = Array.from(trackEl.querySelectorAll('.inline-component'));
 
+        // Force all to active size before measuring to capture true geometry
+        imgEls.forEach(img => {
+            img.dataset.origWidth = img.style.width;
+            img.dataset.origMarginRight = img.style.marginRight;
+            if (img.dataset.size) {
+                img.style.width = img.dataset.size + 'px';
+                img.style.marginRight = '0px';
+            }
+        });
+
         const imagesData = imgEls.map((img) => {
             const rect = img.getBoundingClientRect();
             const wordSpan = img.closest('.word');
@@ -574,12 +584,19 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                 width: trueWidth,
                 height: trueHeight,
                 lineIdx: wordToLineIdx.get(wordSpan),
-                animation: img.dataset.animation || 'none'
+                animation: img.dataset.animation || 'none',
+                inactiveBehavior: img.dataset.inactivebehavior || 'hidden'
             };
         });
 
         setCharsData(charsData);
         if (setImagesData) setImagesData(imagesData);
+
+        // Restore image styles
+        imgEls.forEach(img => {
+            img.style.width = img.dataset.origWidth || '';
+            img.style.marginRight = img.dataset.origMarginRight || '';
+        });
 
         screenEl.style.cssText = originalCssText;
         if (wrapperEl) wrapperEl.style.cssText = originalWrapperCss;
@@ -811,7 +828,11 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                             display: 'inline-block', 
                                                             pointerEvents: isSelectable ? 'auto' : 'none',
                                                             verticalAlign: 'middle',
-                                                            margin: '-5px 0'
+                                                            marginTop: '-5px',
+                                                            marginBottom: '-5px',
+                                                            marginLeft: '0',
+                                                            marginRight: (!active && customComponents.find(c => c.id === word.componentId)?.inactiveBehavior === 'collapse') ? '-0.25em' : '0',
+                                                            transition: active ? 'margin-right 0.25s ease-out' : 'margin-right 0.2s ease-in'
                                                         }}
                                                     >
                                                         {(() => {
@@ -819,18 +840,45 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                             if (!comp) return null;
                                                             return (
                                                                 <span style={{ display: 'inline-block', transform: `translate(${comp.offsetX || 0}px, ${(comp.offsetY || 0) - 5}px)` }}>
-                                                                    <img 
-                                                                        src={comp.src} 
-                                                                        alt="comp" 
-                                                                        className={`inline-component ${active ? `anim-${comp.animation}` : ''}`}
-                                                                        data-animation={comp.animation}
-                                                                        style={{ 
+                                                                    {(() => {
+                                                                        const behavior = comp.inactiveBehavior || 'hidden';
+                                                                        let dynamicStyle = {
                                                                             width: comp.size, height: comp.size, objectFit: 'contain',
-                                                                            opacity: active ? 1 : 0,
-                                                                            transform: active ? 'scale(1)' : 'scale(0.8)',
-                                                                            transition: 'opacity 0.2s ease, transform 0.2s ease'
-                                                                        }}
-                                                                    />
+                                                                            transition: active 
+                                                                                ? 'opacity 0.25s ease-out, transform 0.25s ease-out, width 0.2s ease-out, filter 0.2s ease'
+                                                                                : 'opacity 0.08s ease-in, transform 0.12s ease-in, width 0.2s ease-in, filter 0.2s ease'
+                                                                        };
+                                                                        
+                                                                        if (active) {
+                                                                            dynamicStyle.opacity = 1;
+                                                                            dynamicStyle.transform = 'scale(1)';
+                                                                            dynamicStyle.filter = 'grayscale(0%)';
+                                                                        } else {
+                                                                            if (behavior === 'hidden') {
+                                                                                dynamicStyle.opacity = 0;
+                                                                            } else if (behavior === 'collapse') {
+                                                                                dynamicStyle.opacity = 0;
+                                                                                dynamicStyle.width = 0;
+                                                                                dynamicStyle.transform = 'scale(0)';
+                                                                            } else if (behavior === 'dimmed') {
+                                                                                dynamicStyle.opacity = 0.5;
+                                                                                dynamicStyle.transform = 'scale(0.8)';
+                                                                                dynamicStyle.filter = 'grayscale(100%)';
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        return (
+                                                                            <img 
+                                                                                src={comp.src} 
+                                                                                alt="comp" 
+                                                                                className={`inline-component ${active ? `anim-${comp.animation}` : ''}`}
+                                                                                data-animation={comp.animation}
+                                                                                data-inactivebehavior={comp.inactiveBehavior || 'hidden'}
+                                                                                data-size={comp.size}
+                                                                                style={dynamicStyle}
+                                                                            />
+                                                                        );
+                                                                    })()}
                                                                 </span>
                                                             );
                                                         })()}
@@ -880,7 +928,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                                 const textBefore = wordsInSeg.slice(0, localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
                                                                 const textAfter = wordsInSeg.slice(localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
                                                                 
-                                                                const newText = textBefore + ` [COMP:${armedComponentId}]  ` + textAfter;
+                                                                const newText = textBefore + ` [COMP:${armedComponentId}] ` + textAfter;
                                                                 
                                                                 const newSegments = [...segments];
                                                                 newSegments[targetSegIndex] = { ...newSegments[targetSegIndex], text: newText.trim() };

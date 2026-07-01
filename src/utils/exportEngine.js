@@ -163,6 +163,38 @@ export async function exportVideo({
             ctx.fillStyle = videoBgColor || '#050505';
             ctx.fillRect(0, 0, 1080, 1920);
 
+            // Pre-calculate text shifts for collapsed components on inactive lines
+            const lineShifts = {};
+            for (let imgD of imagesData) {
+                if (imgD.inactiveBehavior === 'collapse') {
+                    if (!lineShifts[imgD.lineIdx]) lineShifts[imgD.lineIdx] = [];
+                    const fullShift = imgD.width + (0.25 * (settings?.fontSize || 45));
+                    let shiftAmount = 0;
+
+                    if (imgD.lineIdx === activeIdx) {
+                        // Expanding: from fullShift to 0 over 400ms
+                        const p = Math.min(timeInLineMs / 400, 1.0);
+                        const easeP = 1 - Math.pow(1 - p, 3); // ease-out
+                        shiftAmount = fullShift * (1 - easeP);
+                    } else if (imgD.lineIdx === activeIdx - 1) {
+                        // Collapsing: from 0 to fullShift over 400ms
+                        const p = Math.min(timeInLineMs / 400, 1.0);
+                        const easeP = 1 - Math.pow(1 - p, 3); // ease-out
+                        shiftAmount = fullShift * easeP;
+                    } else if (imgD.lineIdx !== activeIdx) {
+                        // Fully collapsed
+                        shiftAmount = fullShift;
+                    }
+
+                    if (shiftAmount > 0) {
+                        lineShifts[imgD.lineIdx].push({
+                            baseX: imgD.baseX,
+                            shift: shiftAmount
+                        });
+                    }
+                }
+            }
+
             for (let c of charsData) {
                 let isCharActive = (c.lineIdx === activeIdx);
                 let charColor = '#a6a6a6';
@@ -179,15 +211,27 @@ export async function exportVideo({
                     if (colorProgress > 0) { ctx.shadowColor = charColor; ctx.shadowBlur = 2; }
                     else { ctx.shadowBlur = 0; }
                 } else { ctx.shadowBlur = 0; }
+                
+                let charShift = 0;
+                if (lineShifts[c.lineIdx]) {
+                    for (let collapse of lineShifts[c.lineIdx]) {
+                        if (c.baseX > collapse.baseX) {
+                            charShift -= collapse.shift;
+                        }
+                    }
+                }
 
                 ctx.fillStyle = charColor;
-                ctx.fillText(c.text, c.baseX, c.baseY + currentTranslation);
+                ctx.fillText(c.text, c.baseX + charShift, c.baseY + currentTranslation);
             }
 
             // Draw Images
             for (let imgD of imagesData) {
                 let isImgActive = (imgD.lineIdx === activeIdx);
-                if (isImgActive) {
+                let isImgCollapsing = (imgD.inactiveBehavior === 'collapse' && imgD.lineIdx === activeIdx - 1 && timeInLineMs < 400);
+                let shouldRender = isImgActive || imgD.inactiveBehavior === 'dimmed' || isImgCollapsing;
+                
+                if (shouldRender) {
                     const img = preloadedImages[imgD.src];
                     if (img && img.width) {
                         ctx.save();
@@ -196,10 +240,58 @@ export async function exportVideo({
                         let rotation = 0;
                         let opacity = 1;
                         let translateY = 0;
+                        let translateX = 0;
+
+                        if (lineShifts[imgD.lineIdx]) {
+                            for (let collapse of lineShifts[imgD.lineIdx]) {
+                                if (imgD.baseX > collapse.baseX) {
+                                    translateX -= collapse.shift;
+                                }
+                            }
+                        }
                         
-                        // Animations have different durations, calculate local progress for each
-                        if (imgD.animation === 'pop-rotate' || imgD.animation === 'scale-rotate-left') {
-                            const p = Math.min(timeInLineMs / 500, 1.0);
+                        if (!isImgActive) {
+                            if (imgD.inactiveBehavior === 'collapse' && imgD.lineIdx === activeIdx - 1) {
+                                const p = Math.min(timeInLineMs / 150, 1.0);
+                                scale = 1 - p;
+                                opacity = 1 - p;
+                                rotation = 0;
+                                ctx.filter = `grayscale(${100 * p}%)`;
+                            } else {
+                                scale = 0.8;
+                                rotation = 0;
+                                opacity = imgD.inactiveBehavior === 'collapse' ? 0 : 0.5;
+                                ctx.filter = 'grayscale(100%)';
+                            }
+                        } else {
+                            if (imgD.animation === 'dim-scale-rotate-left' || imgD.animation === 'dim-scale-rotate-right') {
+                                const p = Math.min(timeInLineMs / 500, 1.0);
+                                if (p < 0.5) {
+                                    const subP = p / 0.5;
+                                    scale = 0.8 + (0.2 * subP);
+                                    rotation = 0;
+                                    opacity = 0.5 + (0.5 * subP);
+                                    ctx.filter = `grayscale(${100 - (100 * subP)}%)`;
+                                } else {
+                                    const subP = (p - 0.5) / 0.5;
+                                    scale = 1;
+                                    rotation = (imgD.animation === 'dim-scale-rotate-right' ? 15 : -15) * subP;
+                                    opacity = 1;
+                                    ctx.filter = 'grayscale(0%)';
+                                }
+                            } else if (imgD.animation === 'dim-scale') {
+                                const p = Math.min(timeInLineMs / 300, 1.0);
+                                scale = 0.8 + (0.2 * p);
+                                opacity = 0.5 + (0.5 * p);
+                                ctx.filter = `grayscale(${100 - (100 * p)}%)`;
+                            } else if (imgD.animation === 'dim-bounce-rotate') {
+                                const p = Math.min(timeInLineMs / 500, 1.0);
+                                scale = 0.8 + (0.2 * p);
+                                rotation = -30 * p;
+                                opacity = 0.5 + (0.5 * p);
+                                ctx.filter = `grayscale(${100 - (100 * p)}%)`;
+                            } else if (imgD.animation === 'pop-rotate' || imgD.animation === 'scale-rotate-left') {
+                                const p = Math.min(timeInLineMs / 500, 1.0);
                             if (p < 0.5) {
                                 const subP = p / 0.5;
                                 scale = subP;
@@ -265,9 +357,10 @@ export async function exportVideo({
                             const p = Math.min(timeInLineMs / 300, 1.0);
                             opacity = p;
                         }
+                        } // Close else block
                         
                         ctx.globalAlpha = opacity;
-                        const centerX = imgD.baseX + (imgD.width / 2);
+                        const centerX = imgD.baseX + translateX + (imgD.width / 2);
                         const centerY = imgD.baseY + currentTranslation + (imgD.height / 2);
                         
                         ctx.translate(centerX, centerY + translateY);

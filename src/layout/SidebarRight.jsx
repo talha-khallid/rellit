@@ -138,7 +138,20 @@ export const SidebarRight = () => {
     }
 
     const updateComponentProp = (id, prop, value) => {
-        const newComps = customComponents.map(c => c.id === id ? { ...c, [prop]: value } : c);
+        const newComps = customComponents.map(c => {
+            if (c.id === id) {
+                const newC = { ...c, [prop]: value };
+                if (prop === 'inactiveBehavior') {
+                    if (value === 'dimmed' && (!c.animation || !c.animation.startsWith('dim-'))) {
+                        newC.animation = 'dim-scale-rotate-left';
+                    } else if (value !== 'dimmed' && c.animation && c.animation.startsWith('dim-')) {
+                        newC.animation = 'scale-rotate-left';
+                    }
+                }
+                return newC;
+            }
+            return c;
+        });
         setCustomComponents(newComps);
     };
 
@@ -185,15 +198,27 @@ export const SidebarRight = () => {
                                         <div style={{ display: 'flex', gap: 8 }}>
                                             <input type="number" className="panel-input" value={comp.size} onChange={e => updateComponentProp(comp.id, 'size', parseInt(e.target.value) || 60)} style={{ width: 50, padding: '4px 6px', fontSize: 11 }} title="Size (px)" />
                                             <select className="panel-select" value={comp.animation} onChange={e => updateComponentProp(comp.id, 'animation', e.target.value)} style={{ padding: '4px 6px', fontSize: 11, flex: 1 }}>
-                                                <option value="scale-rotate-left">Scale & Rotate Left (Smooth)</option>
-                                                <option value="scale-rotate-right">Scale & Rotate Right (Smooth)</option>
-                                                <option value="scale">Scale In</option>
-                                                <option value="bounce-rotate">Bounce & Rotate</option>
-                                                <option value="slide-up">Slide Up</option>
-                                                <option value="slide-down">Slide Down</option>
-                                                <option value="spin-in">Spin In</option>
-                                                <option value="fade">Fade In</option>
-                                                <option value="none">None</option>
+                                                {comp.inactiveBehavior === 'dimmed' ? (
+                                                    <>
+                                                        <option value="dim-scale-rotate-left">Dim: Scale & Rotate Left</option>
+                                                        <option value="dim-scale-rotate-right">Dim: Scale & Rotate Right</option>
+                                                        <option value="dim-scale">Dim: Scale</option>
+                                                        <option value="dim-bounce-rotate">Dim: Bounce & Rotate</option>
+                                                        <option value="none">None</option>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <option value="scale-rotate-left">Scale & Rotate Left (Smooth)</option>
+                                                        <option value="scale-rotate-right">Scale & Rotate Right (Smooth)</option>
+                                                        <option value="scale">Scale In</option>
+                                                        <option value="bounce-rotate">Bounce & Rotate</option>
+                                                        <option value="slide-up">Slide Up</option>
+                                                        <option value="slide-down">Slide Down</option>
+                                                        <option value="spin-in">Spin In</option>
+                                                        <option value="fade">Fade In</option>
+                                                        <option value="none">None</option>
+                                                    </>
+                                                )}
                                             </select>
                                         </div>
                                         <div style={{ display: 'flex', gap: 8 }}>
@@ -205,6 +230,13 @@ export const SidebarRight = () => {
                                                 <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Y Offset</span>
                                                 <input type="number" className="panel-input" value={comp.offsetY || 0} onChange={e => updateComponentProp(comp.id, 'offsetY', parseInt(e.target.value) || 0)} style={{ width: 50, padding: '4px 6px', fontSize: 11 }} title="Vertical Offset (px)" />
                                             </div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 8 }}>
+                                            <select className="panel-select" value={comp.inactiveBehavior || 'hidden'} onChange={e => updateComponentProp(comp.id, 'inactiveBehavior', e.target.value)} style={{ padding: '4px 6px', fontSize: 11, flex: 1 }} title="Inactive State Behavior">
+                                                <option value="hidden">Inactive: Hidden (Keep Space)</option>
+                                                <option value="collapse">Inactive: Collapse (Remove Space)</option>
+                                                <option value="dimmed">Inactive: Dimmed (No Rotate)</option>
+                                            </select>
                                         </div>
                                     </div>
                                 </div>
