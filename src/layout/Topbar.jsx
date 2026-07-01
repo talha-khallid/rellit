@@ -40,16 +40,47 @@ export const Topbar = ({ scrollBox, charsData, imagesData }) => {
             setProgress: (text, percent = 0) => {
                 setProgressText(text);
                 setProgressPercent(percent);
+                document.title = `${percent}% • Exporting`;
+                
+                const favicon = document.getElementById('favicon');
+                if (favicon) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 32;
+                    canvas.height = 32;
+                    const ctx = canvas.getContext('2d');
+                    
+                    ctx.beginPath();
+                    ctx.arc(16, 16, 14, 0, Math.PI * 2);
+                    ctx.fillStyle = '#2d2d2d';
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(16, 16);
+                    ctx.arc(16, 16, 14, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * (percent / 100)));
+                    ctx.fillStyle = '#863bff';
+                    ctx.fill();
+                    
+                    favicon.href = canvas.toDataURL('image/png');
+                }
             },
             onComplete: () => { 
                 setExporting(false); 
+                document.title = 'Rellit';
+                const favicon = document.getElementById('favicon');
+                if (favicon) favicon.href = '/favicon.svg';
+                
                 setTimeout(() => {
                     setProgressText('');
                     setProgressPercent(0);
                     closeModal();
                 }, 1500); 
             },
-            onError: () => { setExporting(false); }
+            onError: () => { 
+                setExporting(false);
+                document.title = 'Rellit';
+                const favicon = document.getElementById('favicon');
+                if (favicon) favicon.href = '/favicon.svg';
+            }
         });
     };
 
