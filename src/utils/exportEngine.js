@@ -163,23 +163,35 @@ export async function exportVideo({
             ctx.fillStyle = videoBgColor || '#050505';
             ctx.fillRect(0, 0, 1080, 1920);
 
+            // cubic-bezier(0.4, 0, 0.2, 1) approximation - Material Design standard easing
+            const cubicEase = (t) => {
+                // Attempt to closely match cubic-bezier(0.4, 0, 0.2, 1)
+                // Using a polynomial approximation
+                if (t <= 0) return 0;
+                if (t >= 1) return 1;
+                return t < 0.5
+                    ? 4 * t * t * t
+                    : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            };
+
             // Pre-calculate text shifts for collapsed components on inactive lines
             const lineShifts = {};
             for (let imgD of imagesData) {
                 if (imgD.inactiveBehavior === 'collapse') {
                     if (!lineShifts[imgD.lineIdx]) lineShifts[imgD.lineIdx] = [];
-                    const fullShift = imgD.width + (0.25 * (settings?.fontSize || 45));
+                    const targetFontSize = lineSettings[imgD.lineIdx]?.fontSize || 45;
+                    const fullShift = imgD.width + (0.25 * targetFontSize);
                     let shiftAmount = 0;
 
                     if (imgD.lineIdx === activeIdx) {
-                        // Expanding: from fullShift to 0 over 400ms
-                        const p = Math.min(timeInLineMs / 400, 1.0);
+                        // Expanding: from fullShift to 0 over 250ms (matches CSS 0.25s ease-out)
+                        const p = Math.min(timeInLineMs / 250, 1.0);
                         const easeP = 1 - Math.pow(1 - p, 3); // ease-out
                         shiftAmount = fullShift * (1 - easeP);
                     } else if (imgD.lineIdx === activeIdx - 1) {
-                        // Collapsing: from 0 to fullShift over 400ms
-                        const p = Math.min(timeInLineMs / 400, 1.0);
-                        const easeP = 1 - Math.pow(1 - p, 3); // ease-out
+                        // Collapsing: from 0 to fullShift over 300ms (matches CSS 0.3s ease-in-out)
+                        const p = Math.min(timeInLineMs / 300, 1.0);
+                        const easeP = cubicEase(p);
                         shiftAmount = fullShift * easeP;
                     } else if (imgD.lineIdx !== activeIdx) {
                         // Fully collapsed
@@ -228,7 +240,7 @@ export async function exportVideo({
             // Draw Images
             for (let imgD of imagesData) {
                 let isImgActive = (imgD.lineIdx === activeIdx);
-                let isImgCollapsing = (imgD.inactiveBehavior === 'collapse' && imgD.lineIdx === activeIdx - 1 && timeInLineMs < 400);
+                let isImgCollapsing = (imgD.inactiveBehavior === 'collapse' && imgD.lineIdx === activeIdx - 1 && timeInLineMs < 300);
                 let shouldRender = isImgActive || imgD.inactiveBehavior === 'dimmed' || isImgCollapsing;
                 
                 if (shouldRender) {
@@ -241,6 +253,7 @@ export async function exportVideo({
                         let opacity = 1;
                         let translateY = 0;
                         let translateX = 0;
+                        let currentLayoutWidth = imgD.width;
 
                         if (lineShifts[imgD.lineIdx]) {
                             for (let collapse of lineShifts[imgD.lineIdx]) {
@@ -252,11 +265,18 @@ export async function exportVideo({
                         
                         if (!isImgActive) {
                             if (imgD.inactiveBehavior === 'collapse' && imgD.lineIdx === activeIdx - 1) {
-                                const p = Math.min(timeInLineMs / 150, 1.0);
-                                scale = 1 - p;
-                                opacity = 1 - p;
+                                // Collapsing: matched to CSS 0.3s cubic-bezier(0.4, 0, 0.2, 1)
+                                const p = Math.min(timeInLineMs / 300, 1.0);
+                                const easeP = cubicEase(p);
+                                currentLayoutWidth = imgD.width * (1 - easeP);
+                                scale = 1 - easeP; // visual scale perfectly matches width shrink
+                                opacity = 1 - easeP;
                                 rotation = 0;
-                                ctx.filter = `grayscale(${100 * p}%)`;
+                            } else if (imgD.inactiveBehavior === 'collapse') {
+                                currentLayoutWidth = 0;
+                                scale = 0;
+                                opacity = 0;
+                                rotation = 0;
                             } else {
                                 scale = 0.8;
                                 rotation = 0;
@@ -264,6 +284,14 @@ export async function exportVideo({
                                 ctx.filter = 'grayscale(100%)';
                             }
                         } else {
+                            if (imgD.inactiveBehavior === 'collapse' && timeInLineMs < 250) {
+                                // Expanding
+                                const p = Math.min(timeInLineMs / 250, 1.0);
+                                const easeP = 1 - Math.pow(1 - p, 3); // ease-out
+                                currentLayoutWidth = imgD.width * easeP;
+                                scale = easeP;
+                                opacity = easeP;
+                            }
                             if (imgD.animation === 'dim-scale-rotate-left' || imgD.animation === 'dim-scale-rotate-right') {
                                 const p = Math.min(timeInLineMs / 500, 1.0);
                                 if (p < 0.5) {
@@ -360,10 +388,11 @@ export async function exportVideo({
                         } // Close else block
                         
                         ctx.globalAlpha = opacity;
-                        const centerX = imgD.baseX + translateX + (imgD.width / 2);
-                        const centerY = imgD.baseY + currentTranslation + (imgD.height / 2);
                         
-                        ctx.translate(centerX, centerY + translateY);
+                        const targetWidth = imgD.width * scale;
+                        const targetHeight = imgD.height * scale;
+
+                        ctx.translate(imgD.baseX + translateX + (currentLayoutWidth / 2), imgD.baseY + currentTranslation + translateY + (imgD.height / 2));
                         if (rotation !== 0) ctx.rotate(rotation * Math.PI / 180);
                         if (scale !== 1) ctx.scale(scale, scale);
                         

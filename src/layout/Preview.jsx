@@ -528,6 +528,28 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
             h: scrollRect.height 
         });
 
+        const compSpans = Array.from(trackEl.querySelectorAll('.inline-comp-span'));
+        const imgEls = Array.from(trackEl.querySelectorAll('.inline-component'));
+
+        // Force all components and images to fully expanded active sizes and disable transitions before measuring
+        compSpans.forEach(span => {
+            span.dataset.origMarginRight = span.style.marginRight;
+            span.dataset.origTransition = span.style.transition;
+            span.style.transition = 'none';
+            span.style.marginRight = '0px';
+        });
+
+        imgEls.forEach(img => {
+            img.dataset.origWidth = img.style.width;
+            img.dataset.origMarginRight = img.style.marginRight;
+            img.dataset.origTransition = img.style.transition;
+            img.style.transition = 'none';
+            if (img.dataset.size) {
+                img.style.width = img.dataset.size + 'px';
+                img.style.marginRight = '0px';
+            }
+        });
+
         const wordToLineIdx = new Map();
         visualLines.forEach((lineSpans, lineIdx) => { 
             lineSpans.forEach(wordSpan => wordToLineIdx.set(wordSpan.el, lineIdx)); 
@@ -544,18 +566,6 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                 lineIdx: wordToLineIdx.get(wordSpan), 
                 overrideColor: c.dataset.overrideColor 
             };
-        });
-
-        const imgEls = Array.from(trackEl.querySelectorAll('.inline-component'));
-
-        // Force all to active size before measuring to capture true geometry
-        imgEls.forEach(img => {
-            img.dataset.origWidth = img.style.width;
-            img.dataset.origMarginRight = img.style.marginRight;
-            if (img.dataset.size) {
-                img.style.width = img.dataset.size + 'px';
-                img.style.marginRight = '0px';
-            }
         });
 
         const imagesData = imgEls.map((img) => {
@@ -592,10 +602,15 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         setCharsData(charsData);
         if (setImagesData) setImagesData(imagesData);
 
-        // Restore image styles
+        // Restore styles
+        compSpans.forEach(span => {
+            span.style.marginRight = span.dataset.origMarginRight || '';
+            span.style.transition = span.dataset.origTransition || '';
+        });
         imgEls.forEach(img => {
             img.style.width = img.dataset.origWidth || '';
             img.style.marginRight = img.dataset.origMarginRight || '';
+            img.style.transition = img.dataset.origTransition || '';
         });
 
         screenEl.style.cssText = originalCssText;
@@ -832,21 +847,24 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                             marginBottom: '-5px',
                                                             marginLeft: '0',
                                                             marginRight: (!active && customComponents.find(c => c.id === word.componentId)?.inactiveBehavior === 'collapse') ? '-0.25em' : '0',
-                                                            transition: active ? 'margin-right 0.25s ease-out' : 'margin-right 0.2s ease-in'
+                                                            transition: 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                                                         }}
                                                     >
                                                         {(() => {
                                                             const comp = customComponents.find(c => c.id === word.componentId);
                                                             if (!comp) return null;
+                                                            const isCollapse = (comp.inactiveBehavior === 'collapse');
                                                             return (
                                                                 <span style={{ display: 'inline-block', transform: `translate(${comp.offsetX || 0}px, ${(comp.offsetY || 0) - 5}px)` }}>
                                                                     {(() => {
                                                                         const behavior = comp.inactiveBehavior || 'hidden';
                                                                         let dynamicStyle = {
                                                                             width: comp.size, height: comp.size, objectFit: 'contain',
-                                                                            transition: active 
-                                                                                ? 'opacity 0.25s ease-out, transform 0.25s ease-out, width 0.2s ease-out, filter 0.2s ease'
-                                                                                : 'opacity 0.08s ease-in, transform 0.12s ease-in, width 0.2s ease-in, filter 0.2s ease'
+                                                                            transition: isCollapse
+                                                                                ? 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                                                : active 
+                                                                                    ? 'opacity 0.25s ease-out, transform 0.25s ease-out, filter 0.2s ease, width 0.25s ease-out'
+                                                                                    : 'opacity 0.08s ease-in, transform 0.12s ease-in, filter 0.2s ease, width 0.12s ease-in'
                                                                         };
                                                                         
                                                                         if (active) {
