@@ -88,7 +88,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                 if (currentSelectionCharIds.length > 0) {
                     // Find which segment has the selected character
                     const selectedCharId = currentSelectionCharIds[0];
-                    const selectedWord = renderedWords.find(w => !w.isComponent && (w.chars.some(c => c.id === selectedCharId) || w.spaceId === selectedCharId));
+                    const selectedWord = renderedWords.find(w => !w.isComponent && ((w.chars && w.chars.some(c => c.id === selectedCharId)) || w.spaceId === selectedCharId));
                     if (selectedWord) {
                         targetSegIndex = selectedWord.segIndex;
                         const wordIdx = renderedWords.indexOf(selectedWord);
@@ -96,8 +96,8 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                         
                         // Reconstruct text up to the word
                         const localWordIdx = wordsInSeg.indexOf(selectedWord);
-                        const textBefore = wordsInSeg.slice(0, localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
-                        const textAfter = wordsInSeg.slice(localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
+                        const textBefore = wordsInSeg.slice(0, localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : (w.isExtraSpace ? '' : w.chars.map(c => c.char).join(''))).join(' ');
+                        const textAfter = wordsInSeg.slice(localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : (w.isExtraSpace ? '' : w.chars.map(c => c.char).join(''))).join(' ');
                         
                         newText = textBefore + ` [COMP:${newCompId}] ` + textAfter;
                     }
@@ -943,8 +943,8 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                                 const wordsInSeg = renderedWords.filter(w => w.segIndex === targetSegIndex);
                                                                 const localWordIdx = wordsInSeg.indexOf(word);
                                                                 
-                                                                const textBefore = wordsInSeg.slice(0, localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
-                                                                const textAfter = wordsInSeg.slice(localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : w.chars.map(c => c.char).join('')).join(' ');
+                                                                const textBefore = wordsInSeg.slice(0, localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : (w.isExtraSpace ? '' : w.chars.map(c => c.char).join(''))).join(' ');
+                                                                const textAfter = wordsInSeg.slice(localWordIdx + 1).map(w => w.isComponent ? `[COMP:${w.componentId}]` : (w.isExtraSpace ? '' : w.chars.map(c => c.char).join(''))).join(' ');
                                                                 
                                                                 const newText = textBefore + ` [COMP:${armedComponentId}] ` + textAfter;
                                                                 
