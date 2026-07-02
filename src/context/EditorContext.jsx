@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
+import { loadProject, saveProjectData, getProjects, updateProjectName } from '../utils/storage';
 
 export const EditorContext = createContext();
 
@@ -51,7 +52,7 @@ export class AudioBufferPlayer {
     }
 }
 
-export const EditorProvider = ({ children }) => {
+export const EditorProvider = ({ children, projectId, onGoHome }) => {
     const audioCtxRef = useRef(null);
     const getAudioCtx = useCallback(() => {
         if (!audioCtxRef.current) {
@@ -63,6 +64,7 @@ export const EditorProvider = ({ children }) => {
         return audioCtxRef.current;
     }, []);
     const [segments, setSegments] = useState([]);
+    const [projectName, setProjectName] = useState('');
     const [visualLines, setVisualLines] = useState([]);
     const [lineSettings, setLineSettings] = useState({});
     const [charOverrides, setCharOverrides] = useState({});
@@ -96,13 +98,73 @@ export const EditorProvider = ({ children }) => {
     const [customComponents, setCustomComponents] = useState([]);
     const [armedComponentId, setArmedComponentId] = useState(null);
 
-    // Sync from localStorage or default
+    // Sync from localStorage
     useEffect(() => {
-        fetch('/captions.json')
-            .then(res => res.ok ? res.json() : initialSegments)
-            .then(data => setSegments(data))
-            .catch(() => setSegments(initialSegments));
-    }, []);
+        if (!projectId) return;
+        
+        const projects = getProjects();
+        const activeProj = projects.find(p => p.id === projectId);
+        if (activeProj) {
+            setProjectName(activeProj.name);
+        } else {
+            setProjectName('Untitled Project');
+        }
+
+        const data = loadProject(projectId);
+        if (data) {
+            setSegments(data.segments || []);
+            setVideoBgColor(data.videoBgColor || '#050505');
+            setVideoAlignPercent(data.videoAlignPercent ?? 50);
+            setFontFamily(data.fontFamily || 'Inter, sans-serif');
+            setFontWeight(data.fontWeight || 500);
+            setTextTransform(data.textTransform || 'none');
+            setFontSize(data.fontSize || 45);
+            setTextAlign(data.textAlign || 'left');
+            setLetterSpacing(data.letterSpacing || 0);
+            setCustomComponents(data.customComponents || []);
+            setVisualLines(data.visualLines || []);
+            setLineSettings(data.lineSettings || {});
+            setCharOverrides(data.charOverrides || {});
+        }
+    }, [projectId]);
+
+    const updateName = useCallback((newName) => {
+        if (!projectId) return;
+        const trimmed = newName.trim();
+        if (trimmed) {
+            setProjectName(trimmed);
+            updateProjectName(projectId, trimmed);
+        }
+    }, [projectId]);
+
+    // Autosave
+    useEffect(() => {
+        if (!projectId) return;
+        
+        const saveTimer = setTimeout(() => {
+            saveProjectData(projectId, {
+                segments,
+                videoBgColor,
+                videoAlignPercent,
+                fontFamily,
+                fontWeight,
+                textTransform,
+                fontSize,
+                textAlign,
+                letterSpacing,
+                customComponents,
+                visualLines,
+                lineSettings,
+                charOverrides
+            });
+        }, 1000);
+        
+        return () => clearTimeout(saveTimer);
+    }, [
+        projectId, segments, videoBgColor, videoAlignPercent,
+        fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing,
+        customComponents, visualLines, lineSettings, charOverrides
+    ]);
 
     // Helper: Enforce Audio constraints
     const enforceSegmentAudioConstraints = useCallback((newVisualLines, newLineSettings, currentSegments) => {
@@ -196,6 +258,7 @@ export const EditorProvider = ({ children }) => {
 
     const value = {
         segments, setSegments,
+        projectName, updateName,
         visualLines, setVisualLines,
         lineSettings, setLineSettings,
         charOverrides, setCharOverrides,
@@ -219,7 +282,8 @@ export const EditorProvider = ({ children }) => {
         letterSpacing, setLetterSpacing,
         activeTab, setActiveTab,
         customComponents, setCustomComponents,
-        armedComponentId, setArmedComponentId
+        armedComponentId, setArmedComponentId,
+        onGoHome
     };
 
     return (

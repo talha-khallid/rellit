@@ -8,7 +8,10 @@ export const Topbar = ({ scrollBox, charsData, imagesData }) => {
         visualLines, lineSettings, 
         isPlaying, togglePlayback,
         videoBgColor,
-        activeTab, setActiveTab
+        activeTab, setActiveTab,
+        onGoHome,
+        projectName,
+        updateName
     } = useContext(EditorContext);
 
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -16,6 +19,29 @@ export const Topbar = ({ scrollBox, charsData, imagesData }) => {
     const [exporting, setExporting] = useState(false);
     const [progressText, setProgressText] = useState('');
     const [progressPercent, setProgressPercent] = useState(0);
+
+    const [isEditing, setIsEditing] = useState(false);
+    const [tempName, setTempName] = useState('');
+
+    const handleStartEditing = () => {
+        setTempName(projectName || '');
+        setIsEditing(true);
+    };
+
+    const handleSave = () => {
+        if (tempName.trim()) {
+            updateName(tempName.trim());
+        }
+        setIsEditing(false);
+    };
+
+    const handleInputKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            handleSave();
+        } else if (e.key === 'Escape') {
+            setIsEditing(false);
+        }
+    };
 
     const openModal = () => setIsExportModalOpen(true);
     const closeModal = () => {
@@ -88,7 +114,19 @@ export const Topbar = ({ scrollBox, charsData, imagesData }) => {
         <>
             <div className="top-bar">
                 <div className="top-bar-left">
-                    <div style={{ fontWeight: 600, fontSize: 16, color: '#fff', letterSpacing: 0.5, marginRight: 24 }}>Rellit</div>
+                    <div 
+                        style={{ fontWeight: 600, fontSize: 16, color: '#fff', letterSpacing: 0.5, marginRight: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'color 0.2s' }}
+                        onMouseOver={e => e.currentTarget.style.color = '#863bff'}
+                        onMouseOut={e => e.currentTarget.style.color = '#fff'}
+                        onClick={onGoHome}
+                        title="Back to Projects"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                        </svg>
+                        Rellit
+                    </div>
                     
                     <div className="top-bar-tabs" style={{ marginLeft: 30 }}>
                         <button 
@@ -104,6 +142,29 @@ export const Topbar = ({ scrollBox, charsData, imagesData }) => {
                             onClick={() => setActiveTab('components')}
                         >Components</button>
                     </div>
+                </div>
+                <div className="top-bar-center">
+                    {isEditing ? (
+                        <input
+                            type="text"
+                            className="project-name-input"
+                            value={tempName}
+                            onChange={(e) => setTempName(e.target.value)}
+                            onBlur={handleSave}
+                            onKeyDown={handleInputKeyDown}
+                            autoFocus
+                        />
+                    ) : (
+                        <div className="project-name-wrapper" onClick={handleStartEditing} title="Click to rename project">
+                            <span className="project-name-text">{projectName || 'Untitled Project'}</span>
+                            <span className="project-name-edit-icon">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                            </span>
+                        </div>
+                    )}
                 </div>
                 <div className="top-bar-right">
                     <button className="top-bar-export-btn" onClick={openModal}>

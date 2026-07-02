@@ -415,6 +415,58 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
     justify-content: center;
 }
 
+/* Project Name Editor in Topbar */
+.project-name-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    user-select: none;
+    max-width: 250px;
+    border: 1px solid transparent;
+}
+
+.project-name-wrapper:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.project-name-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: #e0e0e0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.project-name-edit-icon {
+    opacity: 0;
+    color: #a0a0a0;
+    transition: opacity 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.project-name-wrapper:hover .project-name-edit-icon {
+    opacity: 1;
+}
+
+.project-name-input {
+    background-color: #1a1a1a;
+    border: 1px solid #863bff;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 4px;
+    outline: none;
+    width: 180px;
+    text-align: center;
+}
+
 .top-bar-logo {
     height: 32px;
     width: auto;
