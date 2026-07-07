@@ -2,11 +2,14 @@ import React, { useContext } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { CustomColorPicker } from '../components/CustomColorPicker';
 
+const COMP_TOKEN_RE = /\[COMP:comp_\d+\]/g;
+const IMG_MARKER = '[img]';
+
 export const SidebarRight = () => {
-    const { 
-        segments, setSegments, 
+    const {
+        segments, setSegments,
         visualLines, lineSettings, updateLineSettings,
-        isPlaying, currentLineIndex, 
+        isPlaying, currentLineIndex,
         currentSelectionCharIds, setCurrentSelectionCharIds,
         charOverrides, setCharOverrides,
         customComponents, setCustomComponents
@@ -49,8 +52,10 @@ export const SidebarRight = () => {
                 <h2>Inspector</h2>
                 <div id="inspector-content">
                     {disabledNotice}
-                    <span className="context-label" style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, display: 'block', fontWeight: 500 }}>Selection Override</span>
-                    <h3 className="context-title" style={{ fontSize: 20, fontWeight: 500, margin: '0 0 25px 0', color: '#fff' }}>{currentSelectionCharIds.length} Letters</h3>
+                    <div className="panel-header" style={{ marginBottom: 20 }}>
+                        <span className="panel-eyebrow">Selection Override</span>
+                        <h3 className="panel-title">{currentSelectionCharIds.length} Letter{currentSelectionCharIds.length === 1 ? '' : 's'}</h3>
+                    </div>
                     <label>Highlight Color</label>
                     <CustomColorPicker initialHex={firstCharColor} onChange={updateSelectionColor} disabled={isPlaying} />
                     <button className="btn-ghost" onClick={clearSelectionOverrides} disabled={isPlaying}>Reset to Line Color</button>
@@ -64,6 +69,12 @@ export const SidebarRight = () => {
         return (
             <div className="sidebar right-sidebar">
                 <h2>Inspector</h2>
+                <div className="inspector-empty">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"></path>
+                    </svg>
+                    <p>Select a line in the timeline to edit its text, timing and colors.</p>
+                </div>
             </div>
         );
     }
@@ -80,6 +91,22 @@ export const SidebarRight = () => {
         const newSegments = [...segments];
         newSegments[segIndex].text = newText;
         setSegments(newSegments);
+    };
+
+    // The raw text stores inline images as [COMP:comp_123] tokens. We show
+    // them as [img] markers and map edits back so the IDs never surface.
+    const segTokens = segText.match(COMP_TOKEN_RE) || [];
+    const displayText = segText.replace(COMP_TOKEN_RE, IMG_MARKER);
+    const handleDisplayChange = (val) => {
+        let i = 0;
+        const raw = val.split(IMG_MARKER).reduce((acc, part, idx, arr) => {
+            acc += part;
+            if (idx < arr.length - 1) {
+                acc += segTokens[i++] || '';
+            }
+            return acc;
+        }, '');
+        updateSegmentText(raw);
     };
 
     const updateLineDuration = (val) => {
@@ -100,10 +127,10 @@ export const SidebarRight = () => {
                 const localIdx = segmentLineIndices.indexOf(currentLineIndex);
                 let targetLocalIdx = localIdx + 1;
                 if (targetLocalIdx >= segmentLineIndices.length) targetLocalIdx = localIdx - 1;
-                
+
                 const targetIdx = segmentLineIndices[targetLocalIdx];
                 let targetDur = parseFloat(newSettings[targetIdx].duration) - diff;
-                
+
                 if (targetDur < 0.1) {
                     const maxAffordableDiff = parseFloat(newSettings[targetIdx].duration) - 0.1;
                     newDur = oldDur + maxAffordableDiff;
@@ -163,95 +190,107 @@ export const SidebarRight = () => {
     return (
         <div className="sidebar right-sidebar">
             <h2>Inspector</h2>
-            <div id="inspector-content">
+            <div id="inspector-content" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 {disabledNotice}
-                <span className="context-label" style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, display: 'block', fontWeight: 500 }}>Active Line</span>
-                <h3 className="context-title" style={{ fontSize: 20, fontWeight: 500, margin: '0 0 25px 0', color: '#fff' }}>Line {currentLineIndex + 1}</h3>
-                
-                <div className="prop-group" style={{ marginBottom: 24 }}>
-                    <label>Text Content <span style={{ opacity: 0.4, fontWeight: 400 }}>(Segment {segIndex + 1})</span></label>
-                    <textarea 
-                        rows="4" 
-                        disabled={isPlaying} 
-                        value={segText} 
-                        onChange={(e) => updateSegmentText(e.target.value)}
+                <div className="panel-header">
+                    <span className="panel-eyebrow">Active Line</span>
+                    <h3 className="panel-title">Line {currentLineIndex + 1}</h3>
+                </div>
+
+                <div className="field">
+                    <label>Text <span style={{ opacity: 0.5, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>· Segment {segIndex + 1}</span></label>
+                    <textarea
+                        rows="4"
+                        disabled={isPlaying}
+                        value={displayText}
+                        onChange={(e) => handleDisplayChange(e.target.value)}
                     ></textarea>
+                    {segTokens.length > 0 && (
+                        <p className="field-hint">[img] marks an inline image. Delete the marker to remove it from the text.</p>
+                    )}
                 </div>
 
                 {activeLineComponents.length > 0 && (
-                    <div className="prop-group" style={{ marginBottom: 24, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                        <label>Inline Components on Line {currentLineIndex + 1}</label>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-                            {activeLineComponents.map(comp => (
-                                <div key={comp.id} style={{ 
-                                    background: 'var(--bg-input)', padding: '12px', borderRadius: '8px', 
-                                    border: '1px solid var(--border)', display: 'flex', gap: 12, alignItems: 'center'
-                                }}>
-                                    <div style={{ width: 40, height: 40, flexShrink: 0, background: 'var(--bg)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <img src={comp.src} alt="comp" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                    <div className="field">
+                        <label>Inline Images</label>
+                        {activeLineComponents.map((comp, idx) => (
+                            <div key={comp.id} className="comp-card">
+                                <div className="comp-card-head">
+                                    <div className="comp-thumb">
+                                        <img src={comp.src} alt="" />
                                     </div>
-                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>ID: {comp.id.substring(5)}</span>
-                                            <button className="btn-ghost" style={{ padding: '2px 6px', fontSize: 10, color: '#ff4444' }} onClick={() => removeComponent(comp.id)}>Remove</button>
+                                    <span className="comp-card-title">Image{activeLineComponents.length > 1 ? ` ${idx + 1}` : ''}</span>
+                                    <button className="icon-btn danger" title="Remove from line" onClick={() => removeComponent(comp.id)}>
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div className="comp-card-body">
+                                    <div className="field-row cols-3">
+                                        <div className="field">
+                                            <label>Size</label>
+                                            <input type="number" className="panel-input" value={comp.size} onChange={e => updateComponentProp(comp.id, 'size', parseInt(e.target.value) || 60)} />
                                         </div>
-                                        <div style={{ display: 'flex', gap: 8 }}>
-                                            <input type="number" className="panel-input" value={comp.size} onChange={e => updateComponentProp(comp.id, 'size', parseInt(e.target.value) || 60)} style={{ width: 50, padding: '4px 6px', fontSize: 11 }} title="Size (px)" />
-                                            <select className="panel-select" value={comp.animation} onChange={e => updateComponentProp(comp.id, 'animation', e.target.value)} style={{ padding: '4px 6px', fontSize: 11, flex: 1 }}>
-                                                {comp.inactiveBehavior === 'dimmed' ? (
-                                                    <>
-                                                        <option value="dim-scale-rotate-left">Dim: Scale & Rotate Left</option>
-                                                        <option value="dim-scale-rotate-right">Dim: Scale & Rotate Right</option>
-                                                        <option value="dim-scale">Dim: Scale</option>
-                                                        <option value="dim-bounce-rotate">Dim: Bounce & Rotate</option>
-                                                        <option value="none">None</option>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <option value="scale-rotate-left">Scale & Rotate Left (Smooth)</option>
-                                                        <option value="scale-rotate-right">Scale & Rotate Right (Smooth)</option>
-                                                        <option value="scale">Scale In</option>
-                                                        <option value="bounce-rotate">Bounce & Rotate</option>
-                                                        <option value="slide-up">Slide Up</option>
-                                                        <option value="slide-down">Slide Down</option>
-                                                        <option value="spin-in">Spin In</option>
-                                                        <option value="fade">Fade In</option>
-                                                        <option value="none">None</option>
-                                                    </>
-                                                )}
-                                            </select>
+                                        <div className="field">
+                                            <label>X offset</label>
+                                            <input type="number" className="panel-input" value={comp.offsetX || 0} onChange={e => updateComponentProp(comp.id, 'offsetX', parseInt(e.target.value) || 0)} />
                                         </div>
-                                        <div style={{ display: 'flex', gap: 8 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>X Offset</span>
-                                                <input type="number" className="panel-input" value={comp.offsetX || 0} onChange={e => updateComponentProp(comp.id, 'offsetX', parseInt(e.target.value) || 0)} style={{ width: 50, padding: '4px 6px', fontSize: 11 }} title="Horizontal Offset (px)" />
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Y Offset</span>
-                                                <input type="number" className="panel-input" value={comp.offsetY || 0} onChange={e => updateComponentProp(comp.id, 'offsetY', parseInt(e.target.value) || 0)} style={{ width: 50, padding: '4px 6px', fontSize: 11 }} title="Vertical Offset (px)" />
-                                            </div>
+                                        <div className="field">
+                                            <label>Y offset</label>
+                                            <input type="number" className="panel-input" value={comp.offsetY || 0} onChange={e => updateComponentProp(comp.id, 'offsetY', parseInt(e.target.value) || 0)} />
                                         </div>
-                                        <div style={{ display: 'flex', gap: 8 }}>
-                                            <select className="panel-select" value={comp.inactiveBehavior || 'hidden'} onChange={e => updateComponentProp(comp.id, 'inactiveBehavior', e.target.value)} style={{ padding: '4px 6px', fontSize: 11, flex: 1 }} title="Inactive State Behavior">
-                                                <option value="hidden">Inactive: Hidden (Keep Space)</option>
-                                                <option value="collapse">Inactive: Collapse (Remove Space)</option>
-                                                <option value="dimmed">Inactive: Dimmed (No Rotate)</option>
-                                            </select>
-                                        </div>
+                                    </div>
+                                    <div className="field">
+                                        <label>Entrance</label>
+                                        <select className="panel-select" value={comp.animation} onChange={e => updateComponentProp(comp.id, 'animation', e.target.value)}>
+                                            {comp.inactiveBehavior === 'dimmed' ? (
+                                                <>
+                                                    <option value="dim-scale-rotate-left">Scale & rotate left</option>
+                                                    <option value="dim-scale-rotate-right">Scale & rotate right</option>
+                                                    <option value="dim-scale">Scale</option>
+                                                    <option value="dim-bounce-rotate">Bounce & rotate</option>
+                                                    <option value="none">None</option>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <option value="scale-rotate-left">Scale & rotate left</option>
+                                                    <option value="scale-rotate-right">Scale & rotate right</option>
+                                                    <option value="scale">Scale in</option>
+                                                    <option value="bounce-rotate">Bounce & rotate</option>
+                                                    <option value="slide-up">Slide up</option>
+                                                    <option value="slide-down">Slide down</option>
+                                                    <option value="spin-in">Spin in</option>
+                                                    <option value="fade">Fade in</option>
+                                                    <option value="none">None</option>
+                                                </>
+                                            )}
+                                        </select>
+                                    </div>
+                                    <div className="field">
+                                        <label>When line is inactive</label>
+                                        <select className="panel-select" value={comp.inactiveBehavior || 'hidden'} onChange={e => updateComponentProp(comp.id, 'inactiveBehavior', e.target.value)}>
+                                            <option value="hidden">Hide, keep its space</option>
+                                            <option value="collapse">Collapse the space</option>
+                                            <option value="dimmed">Dim in place</option>
+                                        </select>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+                            </div>
+                        ))}
                     </div>
                 )}
 
-                <div className="prop-group" style={{ marginBottom: 24 }}>
-                    <label>Duration (s)</label>
+                <div className="field">
+                    <label>Duration (seconds)</label>
                     <input type="number" step="0.1" value={currentDur} disabled={isPlaying} onChange={(e) => updateLineDuration(e.target.value)} />
                 </div>
-                
-                <label>Line Color</label>
-                <CustomColorPicker initialHex={lineSettings[currentLineIndex]?.color || '#ffffff'} onChange={updateLineColor} disabled={isPlaying} />
+
+                <div className="field">
+                    <label>Line Color</label>
+                    <CustomColorPicker initialHex={lineSettings[currentLineIndex]?.color || '#ffffff'} onChange={updateLineColor} disabled={isPlaying} />
+                </div>
             </div>
         </div>
     );

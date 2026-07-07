@@ -21,6 +21,7 @@ export const Timeline = () => {
     const scrollAreaRef = useRef(null);
     const timelineContentRef = useRef(null);
     const playheadRef = useRef(null);
+    const timeDisplayRef = useRef(null);
 
     const totalTime = visualLines.reduce((acc, _, i) => acc + parseFloat(lineSettings[i]?.duration || 0.1), 0);
 
@@ -30,6 +31,10 @@ export const Timeline = () => {
             if (visualLines.length > 0 && playheadRef.current && timelineContentRef.current) {
                 const t = currentTimeRef.current;
                 playheadRef.current.style.left = `${t * timelineScale}px`;
+
+                if (timeDisplayRef.current) {
+                    timeDisplayRef.current.textContent = `${t.toFixed(1)}s`;
+                }
 
                 if (isPlaying) {
                     const scrollArea = timelineContentRef.current.parentElement;
@@ -210,15 +215,19 @@ export const Timeline = () => {
     return (
         <div className="timeline-container">
             <div className="timeline-header">
-                <span>Timeline Sync</span>
+                <span>Timeline</span>
+                <span className="timeline-time">
+                    <strong ref={timeDisplayRef}>0.0s</strong>
+                    <span style={{ opacity: 0.5 }}> / {totalTime.toFixed(1)}s</span>
+                </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <label style={{ margin: 0, fontSize: 10, opacity: 0.6 }}>ZOOM</label>
-                    <input 
-                        type="range" 
-                        min="20" max="250" 
-                        value={timelineScale} 
-                        onChange={e => setTimelineScale(parseInt(e.target.value))} 
-                        style={{ width: 100, height: 4 }} 
+                    <label style={{ margin: 0, fontSize: 10, opacity: 0.6 }} title="Ctrl + scroll to zoom">Zoom</label>
+                    <input
+                        type="range"
+                        min="20" max="250"
+                        value={timelineScale}
+                        onChange={e => setTimelineScale(parseInt(e.target.value))}
+                        style={{ width: 100, height: 4 }}
                     />
                 </div>
             </div>

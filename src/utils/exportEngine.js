@@ -12,9 +12,21 @@ export async function exportVideo({
     setProgress,
     onComplete,
     onError,
-    videoBgColor
+    videoBgColor,
+    exportScale = 1,
+    fontFamily = 'Inter, sans-serif',
+    fontWeight = 500,
+    fontSize = 45,
+    textTransform = 'none'
 }) {
     const fps = isNaN(fpsInput) ? 60 : Math.max(20, Math.min(60, fpsInput));
+
+    // All geometry (charsData, imagesData, scrollBox) is measured in a
+    // 1080x1920 logical space. exportScale renders that same space onto a
+    // larger canvas (2 = real 2160x3840): vectors and text re-rasterize at
+    // full output resolution.
+    const OUT_W = 1080 * exportScale;
+    const OUT_H = 1920 * exportScale;
 
     const yieldToMain = () => new Promise(resolve => {
         const channel = new MessageChannel();
@@ -50,7 +62,7 @@ export async function exportVideo({
 
         const muxerOptions = {
             target: new Mp4Muxer.ArrayBufferTarget(),
-            video: { codec: 'avc', width: 1080, height: 1920 },
+            video: { codec: 'avc', width: OUT_W, height: OUT_H },
             fastStart: 'in-memory'
         };
 
@@ -86,21 +98,46 @@ export async function exportVideo({
             error: e => console.error(e)
         });
 
-        videoEncoder.configure({
+        // avc1.640034 = H.264 High profile, level 5.2 — covers 2160x3840 @ 60fps.
+        const videoConfigBase = {
             codec: 'avc1.640034',
-            width: 1080,
-            height: 1920,
-            hardwareAcceleration: 'prefer-software',
-            bitrate: 10_000_000,
+            width: OUT_W,
+            height: OUT_H,
+            bitrate: exportScale >= 2 ? 40_000_000 : 10_000_000,
             framerate: fps
-        });
+        };
+        let videoConfig = { ...videoConfigBase, hardwareAcceleration: 'prefer-software' };
+        try {
+            const support = await VideoEncoder.isConfigSupported(videoConfig);
+            if (!support.supported) {
+                videoConfig = { ...videoConfigBase, hardwareAcceleration: 'no-preference' };
+                const fallback = await VideoEncoder.isConfigSupported(videoConfig);
+                if (!fallback.supported) {
+                    throw new Error(`This browser cannot encode ${OUT_W}x${OUT_H} video`);
+                }
+            }
+        } catch (e) {
+            if (e.message && e.message.includes('cannot encode')) throw e;
+            // isConfigSupported itself unavailable — proceed with the base config
+        }
+        videoEncoder.configure(videoConfig);
 
         const offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = 1080;
-        offscreenCanvas.height = 1920;
+        offscreenCanvas.width = OUT_W;
+        offscreenCanvas.height = OUT_H;
         const ctx = offscreenCanvas.getContext('2d', { alpha: false, willReadFrequently: true });
-        ctx.font = '500 43.5px Inter, -apple-system, BlinkMacSystemFont, Roboto, sans-serif';
+        // Draw in the 1080x1920 logical space; the transform upscales losslessly.
+        ctx.scale(exportScale, exportScale);
+        // Char positions come from DOM measurement at `fontSize`; the canvas
+        // rasterizer runs slightly wide, hence the 43.5/45 correction factor.
+        ctx.font = `${fontWeight} ${(fontSize * (43.5 / 45)).toFixed(2)}px ${fontFamily}`;
         ctx.textBaseline = 'top';
+        // shadowBlur is in device pixels (unaffected by the transform)
+        const SHADOW_BLUR = 2 * exportScale;
+        // text-transform is CSS-only; textContent stays raw, so apply it here.
+        const transformChar = textTransform === 'uppercase' ? (t) => t.toUpperCase()
+            : textTransform === 'lowercase' ? (t) => t.toLowerCase()
+            : (t) => t;
 
         const rgb = hexToRgb(videoBgColor || '#050505');
         const bgRgba = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1)`;
@@ -226,7 +263,7 @@ export async function exportVideo({
                     const b = Math.round(c1.b + (c2.b - c1.b) * colorProgress);
                     charColor = `rgb(${r},${g},${b})`;
 
-                    if (colorProgress > 0) { ctx.shadowColor = charColor; ctx.shadowBlur = 2; }
+                    if (colorProgress > 0) { ctx.shadowColor = charColor; ctx.shadowBlur = SHADOW_BLUR; }
                     else { ctx.shadowBlur = 0; }
                 } else { ctx.shadowBlur = 0; }
                 
@@ -240,7 +277,7 @@ export async function exportVideo({
                 }
 
                 ctx.fillStyle = charColor;
-                ctx.fillText(c.text, c.baseX + charShift, c.baseY + currentTranslation);
+                ctx.fillText(transformChar(c.text), c.baseX + charShift, c.baseY + currentTranslation);
             }
 
             // Draw Images

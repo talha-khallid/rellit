@@ -138,9 +138,17 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
     }, [projectId]);
 
     // Autosave
+    const [saveStatus, setSaveStatus] = useState('saved');
+    const isFirstSaveRef = useRef(true);
     useEffect(() => {
         if (!projectId) return;
-        
+        // Skip the initial mount/load pass so we don't flash "Saving..."
+        if (isFirstSaveRef.current) {
+            isFirstSaveRef.current = false;
+            return;
+        }
+        setSaveStatus('saving');
+
         const saveTimer = setTimeout(() => {
             saveProjectData(projectId, {
                 segments,
@@ -153,10 +161,13 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
                 textAlign,
                 letterSpacing,
                 customComponents,
-                visualLines,
+                // Strip live DOM references (span.el) — they can't be serialized
+                // and Preview re-measures lines from the DOM on load anyway.
+                visualLines: visualLines.map(line => line.map(({ el: _el, ...rest }) => rest)),
                 lineSettings,
                 charOverrides
             });
+            setSaveStatus('saved');
         }, 1000);
         
         return () => clearTimeout(saveTimer);
@@ -283,6 +294,7 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
         activeTab, setActiveTab,
         customComponents, setCustomComponents,
         armedComponentId, setArmedComponentId,
+        saveStatus,
         onGoHome
     };
 

@@ -787,7 +787,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                     {renderedWords.map((word, wIdx) => {
                                         let active = false;
                                         if (visualLines[currentLineIndex]) {
-                                            active = visualLines[currentLineIndex].some(span => span.el.dataset.segIndex == word.segIndex && parseInt(span.el.dataset.wordIdx) === wIdx);
+                                            active = visualLines[currentLineIndex].some(span => span.el && span.el.dataset.segIndex == word.segIndex && parseInt(span.el.dataset.wordIdx) === wIdx);
                                         }
 
                                         // STRICT SELECTION FIX: Only active words are selectable when paused

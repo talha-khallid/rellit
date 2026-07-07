@@ -73,8 +73,8 @@ export const SidebarLeft = () => {
     } = useContext(EditorContext);
 
     const renderTypographySettings = () => (
-        <div className="typography-settings" style={{ marginTop: 32, borderTop: '1px solid var(--border)', paddingTop: 24 }}>
-            <span className="context-label" style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16, display: 'block', fontWeight: 500 }}>Global Typography</span>
+        <div className="typography-settings" style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 20 }}>
+            <span className="panel-eyebrow" style={{ marginBottom: 16 }}>Typography</span>
             
             <div className="prop-group" style={{ marginBottom: 16 }}>
                 <label>Font Family</label>
@@ -234,11 +234,17 @@ export const SidebarLeft = () => {
             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 {activeTab === 'media' ? (
                     <>
+                        <div className="panel-header">
+                            <span className="panel-eyebrow">Script</span>
+                            <h3 className="panel-title">Segments</h3>
+                            <p className="panel-subtitle">Each segment is a block of text, optionally synced to its own voiceover clip.</p>
+                        </div>
+
                         {/* Input Form Area */}
                         <div>
-                            <textarea 
+                            <textarea
                                 className="premium-textarea"
-                                placeholder="Enter text......" 
+                                placeholder="Write your next segment..."
                                 value={newText}
                                 onChange={e => setNewText(e.target.value)}
                             ></textarea>
@@ -274,40 +280,61 @@ export const SidebarLeft = () => {
 
                         {/* Segments List Area */}
                         <div id="segments-list">
+                            {segments.length === 0 && (
+                                <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0', lineHeight: 1.6 }}>
+                                    No segments yet.<br />Write some text above to get started.
+                                </p>
+                            )}
                             {segments.map((seg, i) => {
                                 const uniqueInputId = `audio-upload-${i}`;
                                 return (
                                     <div key={i} className="segment-card">
-                                        <div className="segment-box">
+                                        <div className="segment-card-top">
+                                            <span className="segment-num">Segment {i + 1}</span>
+                                            <div className="segment-actions">
+                                                <button className="icon-btn" title="Edit in inspector" onClick={() => editSegment(i)}>
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                        <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                    </svg>
+                                                </button>
+                                                <button className="icon-btn danger" title="Delete segment" onClick={() => handleRemoveSegment(i)}>
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="segment-box" onClick={() => editSegment(i)} title="Click to edit in inspector">
                                             {seg.text}
                                         </div>
-                                        
+
                                         <div className="audio-box">
                                             {seg.audioBuffer ? (
                                                 <Waveform audioBuffer={seg.audioBuffer} />
                                             ) : (
-                                                <div 
-                                                    style={{ color: '#888', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}
+                                                <div
+                                                    style={{ color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flex: 1, fontSize: 12 }}
                                                     onClick={() => document.getElementById(uniqueInputId).click()}
                                                 >
-                                                    Upload Audio <span style={{ fontSize: 14 }}>↑</span>
-                                                    <input 
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                                                    </svg>
+                                                    Add voiceover
+                                                    <input
                                                         id={uniqueInputId}
-                                                        type="file" 
-                                                        accept="audio/*" 
+                                                        type="file"
+                                                        accept="audio/*"
                                                         style={{ display: 'none' }}
                                                         onChange={(e) => handleSegmentAudioChange(i, e)}
                                                     />
                                                 </div>
                                             )}
-                                            <span style={{ fontSize: '13px', color: '#e0e0e0', marginLeft: '16px' }}>
+                                            <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginLeft: '16px', fontFamily: 'monospace' }}>
                                                 {Math.round(seg.duration)}s
                                             </span>
-                                        </div>
-
-                                        <div className="actions-row">
-                                            <button className="btn-action" onClick={() => editSegment(i)}>Edit</button>
-                                            <button className="btn-action" onClick={() => handleRemoveSegment(i)}>Delete</button>
                                         </div>
                                     </div>
                                 );
@@ -316,9 +343,10 @@ export const SidebarLeft = () => {
                     </>
                 ) : activeTab === 'video-settings' ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                        <div>
-                            <span className="context-label" style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, display: 'block', fontWeight: 500 }}>Canvas Settings</span>
-                            <h3 className="context-title" style={{ fontSize: 20, fontWeight: 500, margin: '0 0 25px 0', color: '#fff' }}>Video Settings</h3>
+                        <div className="panel-header">
+                            <span className="panel-eyebrow">Style</span>
+                            <h3 className="panel-title">Canvas & Type</h3>
+                            <p className="panel-subtitle">Background, layout and global typography for the whole video.</p>
                         </div>
 
                         <div className="prop-group">

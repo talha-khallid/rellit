@@ -1,15 +1,54 @@
-import React, { useState, useEffect } from 'react';
-import { getProjects, createProject, deleteProject, updateProjectName } from '../utils/storage';
+import React, { useState, useEffect, useMemo } from 'react';
+import { getProjects, createProject, deleteProject, updateProjectName, duplicateProject, getProjectMeta } from '../utils/storage';
+
+const hueFromId = (id) => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = (hash * 31 + id.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash) % 360;
+};
+
+const formatRelativeTime = (ts) => {
+    const diff = Date.now() - ts;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return new Date(ts).toLocaleDateString();
+};
+
+const formatDuration = (secs) => {
+    if (!secs) return '0s';
+    if (secs < 60) return `${Math.round(secs)}s`;
+    return `${Math.floor(secs / 60)}m ${Math.round(secs % 60)}s`;
+};
 
 export const Dashboard = ({ onOpenProject }) => {
     const [projects, setProjects] = useState([]);
     const [isCreating, setIsCreating] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
+    const [query, setQuery] = useState('');
 
     useEffect(() => {
         setProjects(getProjects());
     }, []);
+
+    const metaById = useMemo(() => {
+        const map = {};
+        projects.forEach(p => { map[p.id] = getProjectMeta(p.id); });
+        return map;
+    }, [projects]);
+
+    const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        if (!q) return projects;
+        return projects.filter(p => p.name.toLowerCase().includes(q));
+    }, [projects, query]);
 
     const handleCreateProject = async () => {
         if (isCreating) return;
@@ -25,6 +64,12 @@ export const Dashboard = ({ onOpenProject }) => {
             deleteProject(id);
             setProjects(getProjects());
         }
+    };
+
+    const handleDuplicate = (e, id) => {
+        e.stopPropagation();
+        duplicateProject(id);
+        setProjects(getProjects());
     };
 
     const startEditing = (e, proj) => {
@@ -46,206 +91,141 @@ export const Dashboard = ({ onOpenProject }) => {
     };
 
     return (
-        <div style={styles.container}>
-            <div style={styles.header}>
-                <div style={styles.logo}>Rellit</div>
+        <div className="dash-container">
+            <div className="dash-header">
+                <div className="dash-logo">
+                    <div className="dash-logo-mark">R</div>
+                    Rellit
+                </div>
             </div>
-            
-            <div style={styles.content}>
-                <h1 style={styles.title}>Projects</h1>
-                
-                <div style={styles.grid}>
-                    {/* New Project Card */}
-                    <div style={styles.newProjectCard} onClick={handleCreateProject}>
-                        <div style={styles.plusIcon}>+</div>
-                        <div style={styles.newProjectText}>{isCreating ? 'Creating...' : 'New Project'}</div>
+
+            <div className="dash-content">
+                <div className="dash-inner">
+                    <div className="dash-toolbar">
+                        <div>
+                            <h1 className="dash-title">Projects</h1>
+                            <p className="dash-subtitle">
+                                {projects.length === 0
+                                    ? 'Create caption videos with word-by-word highlighting'
+                                    : `${projects.length} project${projects.length === 1 ? '' : 's'}`}
+                            </p>
+                        </div>
+                        <div className="dash-toolbar-right">
+                            {projects.length > 0 && (
+                                <div className="dash-search">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    </svg>
+                                    <input
+                                        type="text"
+                                        placeholder="Search projects..."
+                                        value={query}
+                                        onChange={e => setQuery(e.target.value)}
+                                    />
+                                </div>
+                            )}
+                            <button className="dash-new-btn" onClick={handleCreateProject} disabled={isCreating}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                {isCreating ? 'Creating...' : 'New Project'}
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Existing Projects */}
-                    {projects.map(proj => (
-                        <div key={proj.id} style={styles.card} onClick={() => onOpenProject(proj.id)}>
-                            <div style={styles.thumbnail}>
-                                {/* Abstract premium placeholder */}
-                                <div style={{...styles.thumbGradient, background: `linear-gradient(135deg, #${proj.id.substr(-6)} 0%, #1a1a1a 100%)`}}></div>
-                                <div style={styles.playIcon}>▶</div>
+                    {projects.length === 0 ? (
+                        <div className="dash-empty">
+                            <div className="dash-empty-icon">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="2" y="4" width="20" height="16" rx="3"></rect>
+                                    <path d="M10 9l5 3-5 3z" fill="currentColor" stroke="none"></path>
+                                </svg>
                             </div>
-                            
-                            <div style={styles.cardFooter}>
-                                <div style={styles.cardInfo}>
-                                    {editingId === proj.id ? (
-                                        <form onSubmit={(e) => saveEdit(e, proj.id)}>
-                                            <input 
-                                                autoFocus
-                                                type="text" 
-                                                value={editName}
-                                                onChange={e => setEditName(e.target.value)}
-                                                onBlur={(e) => saveEdit(e, proj.id)}
-                                                style={styles.editInput}
-                                                onClick={e => e.stopPropagation()}
-                                            />
-                                        </form>
-                                    ) : (
-                                        <div style={styles.projectName} onClick={(e) => startEditing(e, proj)}>{proj.name}</div>
-                                    )}
-                                    <div style={styles.projectDate}>{new Date(proj.lastModified).toLocaleDateString()} {new Date(proj.lastModified).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                </div>
-                                <button style={styles.deleteBtn} onClick={(e) => handleDelete(e, proj.id)}>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <polyline points="3 6 5 6 21 6"></polyline>
-                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                    </svg>
-                                </button>
-                            </div>
+                            <h3>No projects yet</h3>
+                            <p>Start a new project to turn your script and voiceover into an animated caption video.</p>
+                            <button className="dash-new-btn" onClick={handleCreateProject} disabled={isCreating}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                {isCreating ? 'Creating...' : 'Create your first project'}
+                            </button>
                         </div>
-                    ))}
+                    ) : filtered.length === 0 ? (
+                        <div className="dash-empty">
+                            <h3>No matches</h3>
+                            <p>No projects match “{query}”.</p>
+                        </div>
+                    ) : (
+                        <div className="dash-grid">
+                            {filtered.map(proj => {
+                                const meta = metaById[proj.id] || { segmentCount: 0, totalDuration: 0, firstText: '' };
+                                const hue = hueFromId(proj.id);
+                                return (
+                                    <div key={proj.id} className="dash-card" onClick={() => onOpenProject(proj.id)}>
+                                        <div
+                                            className="dash-thumb"
+                                            style={{ background: `linear-gradient(135deg, hsl(${hue}, 40%, 26%) 0%, #101013 85%)` }}
+                                        >
+                                            {meta.firstText && (
+                                                <div className="dash-thumb-text">{meta.firstText}</div>
+                                            )}
+                                            <div className="dash-thumb-play">
+                                                <div className="dash-thumb-play-circle">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                                        <path d="M8 5v14l11-7z"></path>
+                                                    </svg>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="dash-card-footer">
+                                            <div className="dash-card-info">
+                                                {editingId === proj.id ? (
+                                                    <form onSubmit={(e) => saveEdit(e, proj.id)}>
+                                                        <input
+                                                            autoFocus
+                                                            type="text"
+                                                            className="dash-name-input"
+                                                            value={editName}
+                                                            onChange={e => setEditName(e.target.value)}
+                                                            onBlur={(e) => saveEdit(e, proj.id)}
+                                                            onClick={e => e.stopPropagation()}
+                                                        />
+                                                    </form>
+                                                ) : (
+                                                    <div className="dash-card-name" onClick={(e) => startEditing(e, proj)} title="Click to rename">
+                                                        {proj.name}
+                                                    </div>
+                                                )}
+                                                <div className="dash-card-meta">
+                                                    {meta.segmentCount} segment{meta.segmentCount === 1 ? '' : 's'} · {formatDuration(meta.totalDuration)} · {formatRelativeTime(proj.lastModified)}
+                                                </div>
+                                            </div>
+                                            <div className="dash-card-actions">
+                                                <button className="icon-btn" title="Duplicate project" onClick={(e) => handleDuplicate(e, proj.id)}>
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                    </svg>
+                                                </button>
+                                                <button className="icon-btn danger" title="Delete project" onClick={(e) => handleDelete(e, proj.id)}>
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
     );
-};
-
-const styles = {
-    container: {
-        width: '100vw',
-        height: '100vh',
-        backgroundColor: '#0a0a0a',
-        color: '#fff',
-        fontFamily: 'Inter, sans-serif',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden'
-    },
-    header: {
-        height: '60px',
-        backgroundColor: '#111',
-        borderBottom: '1px solid #222',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 32px'
-    },
-    logo: {
-        fontWeight: 600,
-        fontSize: '18px',
-        letterSpacing: '0.5px'
-    },
-    content: {
-        flex: 1,
-        padding: '48px',
-        overflowY: 'auto'
-    },
-    title: {
-        fontSize: '24px',
-        fontWeight: 600,
-        marginBottom: '32px',
-        color: '#f0f0f0'
-    },
-    grid: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-        gap: '24px'
-    },
-    newProjectCard: {
-        backgroundColor: '#161616',
-        border: '1px dashed #333',
-        borderRadius: '12px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        aspectRatio: '16/9',
-        transition: 'all 0.2s ease',
-        ':hover': {
-            borderColor: '#863bff',
-            backgroundColor: '#1a1a1a'
-        }
-    },
-    plusIcon: {
-        fontSize: '32px',
-        color: '#863bff',
-        marginBottom: '8px'
-    },
-    newProjectText: {
-        fontSize: '14px',
-        fontWeight: 500,
-        color: '#aaa'
-    },
-    card: {
-        backgroundColor: '#161616',
-        borderRadius: '12px',
-        overflow: 'hidden',
-        cursor: 'pointer',
-        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-        border: '1px solid #222',
-        display: 'flex',
-        flexDirection: 'column'
-    },
-    thumbnail: {
-        aspectRatio: '16/9',
-        backgroundColor: '#000',
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    thumbGradient: {
-        position: 'absolute',
-        top: 0, left: 0, right: 0, bottom: 0,
-        opacity: 0.6
-    },
-    playIcon: {
-        position: 'relative',
-        zIndex: 1,
-        color: '#fff',
-        fontSize: '24px',
-        opacity: 0.8
-    },
-    cardFooter: {
-        padding: '12px 16px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderTop: '1px solid #222'
-    },
-    cardInfo: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '4px',
-        overflow: 'hidden'
-    },
-    projectName: {
-        fontSize: '14px',
-        fontWeight: 500,
-        color: '#eee',
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis'
-    },
-    projectDate: {
-        fontSize: '12px',
-        color: '#777'
-    },
-    deleteBtn: {
-        background: 'none',
-        border: 'none',
-        color: '#555',
-        cursor: 'pointer',
-        padding: '4px',
-        borderRadius: '4px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        transition: 'color 0.2s'
-    },
-    editInput: {
-        background: '#000',
-        border: '1px solid #863bff',
-        color: '#fff',
-        fontSize: '14px',
-        fontWeight: 500,
-        padding: '2px 4px',
-        borderRadius: '4px',
-        width: '100%',
-        outline: 'none'
-    }
 };

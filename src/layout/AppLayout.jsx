@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { SidebarLeft } from './SidebarLeft';
+import { IconRail } from './IconRail';
 import { SidebarRight } from './SidebarRight';
 import { Preview } from './Preview';
 import { Timeline } from './Timeline';
@@ -34,6 +35,7 @@ export const AppLayout = () => {
         <div className="app-container">
             <Topbar scrollBox={scrollBox} charsData={charsData} imagesData={imagesData} />
             <div className="main-workspace">
+                <IconRail />
                 <SidebarLeft scrollBox={scrollBox} charsData={charsData} />
                 <Preview setScrollBox={setScrollBox} setCharsData={setCharsData} setImagesData={setImagesData} />
                 <SidebarRight />

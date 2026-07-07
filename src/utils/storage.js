@@ -105,6 +105,45 @@ export const updateProjectName = (id, newName) => {
     }
 };
 
+export const duplicateProject = (id) => {
+    const projects = getProjects();
+    const source = projects.find(p => p.id === id);
+    if (!source) return null;
+
+    const newId = 'proj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const copy = {
+        id: newId,
+        name: `${source.name} (copy)`,
+        lastModified: Date.now()
+    };
+    projects.push(copy);
+    saveProjectsList(projects);
+
+    const data = loadProject(id);
+    if (data) {
+        localStorage.setItem(`rellit_data_${newId}`, JSON.stringify(data));
+    }
+    return copy;
+};
+
+// Lightweight stats for dashboard cards: segment count + total duration.
+export const getProjectMeta = (id) => {
+    const data = loadProject(id);
+    if (!data) return { segmentCount: 0, totalDuration: 0, firstText: '' };
+
+    const lineDurations = Object.values(data.lineSettings || {});
+    let totalDuration = lineDurations.reduce((acc, s) => acc + (parseFloat(s.duration) || 0), 0);
+    if (totalDuration === 0) {
+        totalDuration = (data.segments || []).reduce((acc, s) => acc + (parseFloat(s.duration) || 0), 0);
+    }
+
+    return {
+        segmentCount: (data.segments || []).length,
+        totalDuration,
+        firstText: data.segments?.[0]?.text || ''
+    };
+};
+
 export const deleteProject = (id) => {
     const projects = getProjects();
     const newProjects = projects.filter(p => p.id !== id);
