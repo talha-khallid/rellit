@@ -544,17 +544,19 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         
         const wrapperEl = screenEl.querySelector('.caption-wrapper');
         const originalWrapperCss = wrapperEl ? wrapperEl.style.cssText : '';
-        // The caption's flex group is a positioned ancestor; neutralize it so the
-        // wrapper's forced absolute position below anchors to the SCREEN (not the
-        // group), giving baseY relative to the caption's rest center.
+        // The caption's flex group is both positioned AND transformed; either makes
+        // it the containing block for the wrapper's forced-absolute positioning
+        // below. Neutralize both so the wrapper anchors to the SCREEN instead, giving
+        // baseY relative to the caption's rest center (not the tiny group box).
         const groupEl = screenEl.querySelector('.caption-group');
         const originalGroupPos = groupEl ? groupEl.style.position : '';
+        const originalGroupTransform = groupEl ? groupEl.style.transform : '';
         const trackEl = trackRef.current;
 
         document.body.appendChild(screenEl);
 
         screenEl.style.cssText = `width: 1080px !important; height: 1920px !important; max-width: none !important; position: absolute !important; top: 0 !important; left: 0 !important; z-index: -1000 !important; transform: scale(1) !important; display: block !important; background-color: ${videoBgColor} !important; border-radius: 0 !important; font-family: ${fontFamily} !important; letter-spacing: ${letterSpacing}px !important; text-transform: ${textTransform} !important; text-align: ${textAlign} !important;`;
-        if (groupEl) groupEl.style.position = 'static';
+        if (groupEl) { groupEl.style.position = 'static'; groupEl.style.transform = 'none'; }
         if (wrapperEl) {
             wrapperEl.style.cssText = `position: absolute !important; top: ${videoAlignPercent}% !important; transform: translateY(-50%) !important; left: 0 !important; width: 100% !important; padding-left: 54px !important; padding-right: 157px !important; box-sizing: border-box !important; font-size: ${fontSize}px !important; line-height: 1.45 !important;`;
         }
@@ -664,7 +666,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
 
         screenEl.style.cssText = originalCssText;
         if (wrapperEl) wrapperEl.style.cssText = originalWrapperCss;
-        if (groupEl) groupEl.style.position = originalGroupPos;
+        if (groupEl) { groupEl.style.position = originalGroupPos; groupEl.style.transform = originalGroupTransform; }
         trackEl.style.transform = originalTrackTransform;
 
         if (originalNextSibling) {
