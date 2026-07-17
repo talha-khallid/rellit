@@ -1,6 +1,19 @@
 import * as Mp4Muxer from 'mp4-muxer';
 import { hexToRgb } from './colorUtils';
 
+// Trace a rounded-rectangle path (for clipping inline images with a corner
+// radius). Kept manual instead of ctx.roundRect for maximum canvas support.
+function roundRectPath(ctx, x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
 export async function exportVideo({
     segments,
     visualLines,
@@ -217,36 +230,41 @@ export async function exportVideo({
                     : 1 - Math.pow(-2 * t + 2, 3) / 2;
             };
 
-            // Pre-calculate text shifts for collapsed components on inactive lines
+            // Pre-calculate text shifts for collapsed components. Whether an image
+            // collapses depends on direction: its "after" behavior once its line has
+            // played (line in the past), its "before" behavior beforehand.
             const lineShifts = {};
             for (let imgD of imagesData) {
-                if (imgD.inactiveBehavior === 'collapse') {
-                    if (!lineShifts[imgD.lineIdx]) lineShifts[imgD.lineIdx] = [];
-                    const targetFontSize = lineSettings[imgD.lineIdx]?.fontSize || 45;
-                    const fullShift = imgD.width + (0.25 * targetFontSize);
-                    let shiftAmount = 0;
+                const li = imgD.lineIdx;
+                let collapsesHere;
+                if (li === activeIdx) collapsesHere = imgD.beforeBehavior === 'collapse'; // expanding from before
+                else if (li === activeIdx - 1) collapsesHere = imgD.afterBehavior === 'collapse'; // collapsing after
+                else if (li < activeIdx) collapsesHere = imgD.afterBehavior === 'collapse'; // past
+                else collapsesHere = imgD.beforeBehavior === 'collapse'; // future
+                if (!collapsesHere) continue;
 
-                    if (imgD.lineIdx === activeIdx) {
-                        // Expanding: from fullShift to 0 over 250ms (matches CSS 0.25s ease-out)
-                        const p = Math.min(timeInLineMs / 250, 1.0);
-                        const easeP = 1 - Math.pow(1 - p, 3); // ease-out
-                        shiftAmount = fullShift * (1 - easeP);
-                    } else if (imgD.lineIdx === activeIdx - 1) {
-                        // Collapsing: from 0 to fullShift over 300ms (matches CSS 0.3s ease-in-out)
-                        const p = Math.min(timeInLineMs / 300, 1.0);
-                        const easeP = cubicEase(p);
-                        shiftAmount = fullShift * easeP;
-                    } else if (imgD.lineIdx !== activeIdx) {
-                        // Fully collapsed
-                        shiftAmount = fullShift;
-                    }
+                if (!lineShifts[li]) lineShifts[li] = [];
+                const targetFontSize = lineSettings[li]?.fontSize || 45;
+                const fullShift = imgD.width + (0.25 * targetFontSize);
+                let shiftAmount = 0;
 
-                    if (shiftAmount > 0) {
-                        lineShifts[imgD.lineIdx].push({
-                            baseX: imgD.baseX,
-                            shift: shiftAmount
-                        });
-                    }
+                if (li === activeIdx) {
+                    // Expanding: from fullShift to 0 over 250ms (matches CSS 0.25s ease-out)
+                    const p = Math.min(timeInLineMs / 250, 1.0);
+                    const easeP = 1 - Math.pow(1 - p, 3); // ease-out
+                    shiftAmount = fullShift * (1 - easeP);
+                } else if (li === activeIdx - 1) {
+                    // Collapsing: from 0 to fullShift over 300ms (matches CSS 0.3s ease-in-out)
+                    const p = Math.min(timeInLineMs / 300, 1.0);
+                    const easeP = cubicEase(p);
+                    shiftAmount = fullShift * easeP;
+                } else {
+                    // Fully collapsed
+                    shiftAmount = fullShift;
+                }
+
+                if (shiftAmount > 0) {
+                    lineShifts[li].push({ baseX: imgD.baseX, shift: shiftAmount });
                 }
             }
 
@@ -282,15 +300,21 @@ export async function exportVideo({
 
             // Draw Images
             for (let imgD of imagesData) {
-                let isImgActive = (imgD.lineIdx === activeIdx);
-                let isImgCollapsing = (imgD.inactiveBehavior === 'collapse' && imgD.lineIdx === activeIdx - 1 && timeInLineMs < 300);
-                let shouldRender = isImgActive || imgD.inactiveBehavior === 'dimmed' || isImgCollapsing;
-                
+                const li = imgD.lineIdx;
+                const isImgActive = (li === activeIdx);
+                // Behavior for this exact moment, chosen by direction: "after" once
+                // its line has played, "before" beforehand.
+                const beh = isImgActive ? 'active' : (li < activeIdx ? imgD.afterBehavior : imgD.beforeBehavior);
+                const isImgCollapsing = (li === activeIdx - 1 && imgD.afterBehavior === 'collapse' && timeInLineMs < 300);
+                // Draw when active, mid-collapse, or resting visibly (dim / keep-visible).
+                // 'hidden' keeps its space but is invisible; collapsed is invisible too.
+                const shouldRender = isImgActive || isImgCollapsing || beh === 'dim' || beh === 'visible';
+
                 if (shouldRender) {
                     const img = preloadedImages[imgD.src];
                     if (img && img.width) {
                         ctx.save();
-                        
+
                         let scale = 1;
                         let rotation = 0;
                         let opacity = 1;
@@ -298,36 +322,36 @@ export async function exportVideo({
                         let translateX = 0;
                         let currentLayoutWidth = imgD.width;
 
-                        if (lineShifts[imgD.lineIdx]) {
-                            for (let collapse of lineShifts[imgD.lineIdx]) {
+                        if (lineShifts[li]) {
+                            for (let collapse of lineShifts[li]) {
                                 if (imgD.baseX > collapse.baseX) {
                                     translateX -= collapse.shift;
                                 }
                             }
                         }
-                        
+
                         if (!isImgActive) {
-                            if (imgD.inactiveBehavior === 'collapse' && imgD.lineIdx === activeIdx - 1) {
-                                // Collapsing: matched to CSS 0.3s cubic-bezier(0.4, 0, 0.2, 1)
+                            if (isImgCollapsing) {
+                                // Collapsing after its line: matches CSS 0.3s cubic-bezier(0.4,0,0.2,1)
                                 const p = Math.min(timeInLineMs / 300, 1.0);
                                 const easeP = cubicEase(p);
                                 currentLayoutWidth = imgD.width * (1 - easeP);
-                                scale = 1 - easeP; // visual scale perfectly matches width shrink
+                                scale = 1 - easeP; // visual scale matches width shrink
                                 opacity = 1 - easeP;
                                 rotation = 0;
-                            } else if (imgD.inactiveBehavior === 'collapse') {
-                                currentLayoutWidth = 0;
-                                scale = 0;
-                                opacity = 0;
-                                rotation = 0;
-                            } else {
+                            } else if (beh === 'dim') {
                                 scale = 0.8;
                                 rotation = 0;
-                                opacity = imgD.inactiveBehavior === 'collapse' ? 0 : 0.5;
+                                opacity = 0.5;
                                 ctx.filter = 'grayscale(100%)';
+                            } else {
+                                // 'visible' — resting at full size
+                                scale = 1;
+                                rotation = 0;
+                                opacity = 1;
                             }
                         } else {
-                            if (imgD.inactiveBehavior === 'collapse' && timeInLineMs < 250) {
+                            if (imgD.beforeBehavior === 'collapse' && timeInLineMs < 250) {
                                 // Expanding
                                 const p = Math.min(timeInLineMs / 250, 1.0);
                                 const easeP = 1 - Math.pow(1 - p, 3); // ease-out
@@ -431,14 +455,19 @@ export async function exportVideo({
                         } // Close else block
                         
                         ctx.globalAlpha = opacity;
-                        
-                        const targetWidth = imgD.width * scale;
-                        const targetHeight = imgD.height * scale;
+
+                        // Static tilt is added on top of any animation rotation.
+                        const totalRotation = rotation + (imgD.rotation || 0);
 
                         ctx.translate(imgD.baseX + translateX + (currentLayoutWidth / 2), imgD.baseY + currentTranslation + translateY + (imgD.height / 2));
-                        if (rotation !== 0) ctx.rotate(rotation * Math.PI / 180);
+                        if (totalRotation !== 0) ctx.rotate(totalRotation * Math.PI / 180);
                         if (scale !== 1) ctx.scale(scale, scale);
-                        
+
+                        // Rounded corners: clip to a rounded rect before drawing.
+                        if (imgD.borderRadius > 0) {
+                            roundRectPath(ctx, -imgD.width / 2, -imgD.height / 2, imgD.width, imgD.height, imgD.borderRadius);
+                            ctx.clip();
+                        }
                         ctx.drawImage(img, -imgD.width / 2, -imgD.height / 2, imgD.width, imgD.height);
                         ctx.restore();
                     }

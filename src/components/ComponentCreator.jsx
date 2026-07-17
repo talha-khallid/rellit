@@ -1,5 +1,6 @@
 import React, { useState, useContext, useRef, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
+import { BEHAVIOR_OPTIONS, newComponentDefaults } from '../utils/componentStyle';
 
 export const ComponentCreator = () => {
     const {
@@ -7,19 +8,25 @@ export const ComponentCreator = () => {
         armedComponentId, setArmedComponentId,
         segments, setSegments
     } = useContext(EditorContext);
+    const defaults = newComponentDefaults();
     const [imageSrc, setImageSrc] = useState(null);
     const [size, setSize] = useState(60);
     const [animation, setAnimation] = useState('scale-rotate-left');
-    const [inactiveBehavior, setInactiveBehavior] = useState('hidden');
+    const [beforeBehavior, setBeforeBehavior] = useState(defaults.beforeBehavior);
+    const [afterBehavior, setAfterBehavior] = useState(defaults.afterBehavior);
+    const [borderRadius, setBorderRadius] = useState(defaults.borderRadius);
+    const [rotation, setRotation] = useState(defaults.rotation);
     const fileInputRef = useRef(null);
 
+    // The entrance animation starts from the "before" state, so use the dim-*
+    // variants (which transition from dimmed→full) when it enters from a dim.
     useEffect(() => {
-        if (inactiveBehavior === 'dimmed' && !animation.startsWith('dim-')) {
+        if (beforeBehavior === 'dim' && !animation.startsWith('dim-')) {
             setAnimation('dim-scale-rotate-left');
-        } else if (inactiveBehavior !== 'dimmed' && animation.startsWith('dim-')) {
+        } else if (beforeBehavior !== 'dim' && animation.startsWith('dim-')) {
             setAnimation('scale-rotate-left');
         }
-    }, [inactiveBehavior, animation]);
+    }, [beforeBehavior, animation]);
 
     // Esc cancels placement mode
     useEffect(() => {
@@ -60,7 +67,12 @@ export const ComponentCreator = () => {
             src: imageSrc,
             size,
             animation,
-            inactiveBehavior
+            beforeBehavior,
+            afterBehavior,
+            borderRadius,
+            rotation,
+            offsetX: 0,
+            offsetY: 0
         };
         setCustomComponents([...customComponents, newComp]);
         setImageSrc(null);
@@ -136,11 +148,39 @@ export const ComponentCreator = () => {
                     />
                 </div>
                 <div className="field">
-                    <label>When inactive</label>
-                    <select className="panel-select" value={inactiveBehavior} onChange={(e) => setInactiveBehavior(e.target.value)}>
-                        <option value="hidden">Hide</option>
-                        <option value="collapse">Collapse</option>
-                        <option value="dimmed">Dim</option>
+                    <label>Corner radius</label>
+                    <input
+                        type="number"
+                        className="panel-input"
+                        value={borderRadius}
+                        onChange={(e) => setBorderRadius(Math.max(0, parseInt(e.target.value) || 0))}
+                    />
+                </div>
+            </div>
+
+            <div className="field-row cols-2">
+                <div className="field">
+                    <label>Rotation (°)</label>
+                    <input
+                        type="number"
+                        className="panel-input"
+                        value={rotation}
+                        onChange={(e) => setRotation(parseInt(e.target.value) || 0)}
+                    />
+                </div>
+            </div>
+
+            <div className="field-row cols-2">
+                <div className="field">
+                    <label>Before its moment</label>
+                    <select className="panel-select" value={beforeBehavior} onChange={(e) => setBeforeBehavior(e.target.value)}>
+                        {BEHAVIOR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                </div>
+                <div className="field">
+                    <label>After its moment</label>
+                    <select className="panel-select" value={afterBehavior} onChange={(e) => setAfterBehavior(e.target.value)}>
+                        {BEHAVIOR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                 </div>
             </div>
@@ -148,7 +188,7 @@ export const ComponentCreator = () => {
             <div className="field">
                 <label>Entrance</label>
                 <select className="panel-select" value={animation} onChange={(e) => setAnimation(e.target.value)}>
-                    {inactiveBehavior === 'dimmed' ? (
+                    {beforeBehavior === 'dim' ? (
                         <>
                             <option value="dim-scale-rotate-left">Scale & rotate left</option>
                             <option value="dim-scale-rotate-right">Scale & rotate right</option>

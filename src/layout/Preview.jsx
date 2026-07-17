@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 'react';
 import { EditorContext } from '../context/EditorContext';
+import { getBehaviors, newComponentDefaults } from '../utils/componentStyle';
 
 export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const { 
@@ -85,7 +86,8 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                     id: newCompId,
                     src,
                     size: 40,
-                    animation: 'pop-rotate'
+                    animation: 'scale-rotate-left',
+                    ...newComponentDefaults()
                 }]);
 
                 // Determine insertion text segment
@@ -612,7 +614,10 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                 height: trueHeight,
                 lineIdx: wordToLineIdx.get(wordSpan),
                 animation: img.dataset.animation || 'none',
-                inactiveBehavior: img.dataset.inactivebehavior || 'hidden'
+                beforeBehavior: img.dataset.beforeBehavior || 'hidden',
+                afterBehavior: img.dataset.afterBehavior || 'hidden',
+                borderRadius: parseFloat(img.dataset.borderRadius) || 0,
+                rotation: parseFloat(img.dataset.rotation) || 0
             };
         });
 
@@ -810,6 +815,19 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                         // STRICT SELECTION FIX: Only active words are selectable when paused
                                         const isSelectable = active && !isPlaying;
 
+                                        // For inline images: pick the behavior for THIS moment — the
+                                        // "after" behavior once the image's line has already played,
+                                        // otherwise the "before" behavior. null while it's active.
+                                        let compBehavior = null;
+                                        if (word.isComponent && !active) {
+                                            let wln = -1;
+                                            for (let li = 0; li < visualLines.length; li++) {
+                                                if (visualLines[li].some(sp => sp.el && sp.el.dataset.segIndex == word.segIndex && parseInt(sp.el.dataset.wordIdx) === wIdx)) { wln = li; break; }
+                                            }
+                                            const b = getBehaviors(customComponents.find(c => c.id === word.componentId));
+                                            compBehavior = (wln !== -1 && wln < currentLineIndex) ? b.after : b.before;
+                                        }
+
                                         return (
                                             <React.Fragment key={wIdx}>
                                                 {word.isExtraSpace ? (
@@ -863,52 +881,58 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                             marginTop: '-5px',
                                                             marginBottom: '-5px',
                                                             marginLeft: '0',
-                                                            marginRight: (!active && customComponents.find(c => c.id === word.componentId)?.inactiveBehavior === 'collapse') ? '-0.25em' : '0',
+                                                            marginRight: (!active && compBehavior === 'collapse') ? '-0.25em' : '0',
                                                             transition: 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                                                         }}
                                                     >
                                                         {(() => {
                                                             const comp = customComponents.find(c => c.id === word.componentId);
                                                             if (!comp) return null;
-                                                            const isCollapse = (comp.inactiveBehavior === 'collapse');
+                                                            const behaviors = getBehaviors(comp);
+                                                            const isCollapse = (compBehavior === 'collapse');
                                                             return (
-                                                                <span style={{ display: 'inline-block', transform: `translate(${comp.offsetX || 0}px, ${(comp.offsetY || 0) - 5}px)` }}>
+                                                                <span style={{ display: 'inline-block', transform: `translate(${comp.offsetX || 0}px, ${(comp.offsetY || 0) - 5}px) rotate(${comp.rotation || 0}deg)` }}>
                                                                     {(() => {
-                                                                        const behavior = comp.inactiveBehavior || 'hidden';
                                                                         let dynamicStyle = {
                                                                             width: comp.size, height: comp.size, objectFit: 'contain',
+                                                                            borderRadius: comp.borderRadius || 0,
                                                                             transition: isCollapse
                                                                                 ? 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                                                                                : active 
+                                                                                : active
                                                                                     ? 'opacity 0.25s ease-out, transform 0.25s ease-out, filter 0.2s ease, width 0.25s ease-out'
                                                                                     : 'opacity 0.08s ease-in, transform 0.12s ease-in, filter 0.2s ease, width 0.12s ease-in'
                                                                         };
-                                                                        
+
                                                                         if (active) {
                                                                             dynamicStyle.opacity = 1;
                                                                             dynamicStyle.transform = 'scale(1)';
                                                                             dynamicStyle.filter = 'grayscale(0%)';
-                                                                        } else {
-                                                                            if (behavior === 'hidden') {
-                                                                                dynamicStyle.opacity = 0;
-                                                                            } else if (behavior === 'collapse') {
-                                                                                dynamicStyle.opacity = 0;
-                                                                                dynamicStyle.width = 0;
-                                                                                dynamicStyle.transform = 'scale(0)';
-                                                                            } else if (behavior === 'dimmed') {
-                                                                                dynamicStyle.opacity = 0.5;
-                                                                                dynamicStyle.transform = 'scale(0.8)';
-                                                                                dynamicStyle.filter = 'grayscale(100%)';
-                                                                            }
+                                                                        } else if (compBehavior === 'collapse') {
+                                                                            dynamicStyle.opacity = 0;
+                                                                            dynamicStyle.width = 0;
+                                                                            dynamicStyle.transform = 'scale(0)';
+                                                                        } else if (compBehavior === 'dim') {
+                                                                            dynamicStyle.opacity = 0.5;
+                                                                            dynamicStyle.transform = 'scale(0.8)';
+                                                                            dynamicStyle.filter = 'grayscale(100%)';
+                                                                        } else if (compBehavior === 'visible') {
+                                                                            dynamicStyle.opacity = 1;
+                                                                            dynamicStyle.transform = 'scale(1)';
+                                                                            dynamicStyle.filter = 'grayscale(0%)';
+                                                                        } else { // 'hidden' — invisible but keeps its space
+                                                                            dynamicStyle.opacity = 0;
                                                                         }
-                                                                        
+
                                                                         return (
-                                                                            <img 
-                                                                                src={comp.src} 
-                                                                                alt="comp" 
+                                                                            <img
+                                                                                src={comp.src}
+                                                                                alt="comp"
                                                                                 className={`inline-component ${active ? `anim-${comp.animation}` : ''}`}
                                                                                 data-animation={comp.animation}
-                                                                                data-inactivebehavior={comp.inactiveBehavior || 'hidden'}
+                                                                                data-before-behavior={behaviors.before}
+                                                                                data-after-behavior={behaviors.after}
+                                                                                data-border-radius={comp.borderRadius || 0}
+                                                                                data-rotation={comp.rotation || 0}
                                                                                 data-size={comp.size}
                                                                                 style={dynamicStyle}
                                                                             />

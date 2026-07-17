@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { CustomColorPicker } from '../components/CustomColorPicker';
+import { BEHAVIOR_OPTIONS, getBehaviors } from '../utils/componentStyle';
 
 const COMP_TOKEN_RE = /\[COMP:comp_\d+\]/g;
 const IMG_MARKER = '[img]';
@@ -168,10 +169,12 @@ export const SidebarRight = () => {
         const newComps = customComponents.map(c => {
             if (c.id === id) {
                 const newC = { ...c, [prop]: value };
-                if (prop === 'inactiveBehavior') {
-                    if (value === 'dimmed' && (!c.animation || !c.animation.startsWith('dim-'))) {
+                // The entrance plays out of the "before" state, so keep the
+                // dim-* animations in sync when that becomes/stops being 'dim'.
+                if (prop === 'beforeBehavior') {
+                    if (value === 'dim' && (!c.animation || !c.animation.startsWith('dim-'))) {
                         newC.animation = 'dim-scale-rotate-left';
-                    } else if (value !== 'dimmed' && c.animation && c.animation.startsWith('dim-')) {
+                    } else if (value !== 'dim' && c.animation && c.animation.startsWith('dim-')) {
                         newC.animation = 'scale-rotate-left';
                     }
                 }
@@ -242,10 +245,20 @@ export const SidebarRight = () => {
                                             <input type="number" className="panel-input" value={comp.offsetY || 0} onChange={e => updateComponentProp(comp.id, 'offsetY', parseInt(e.target.value) || 0)} />
                                         </div>
                                     </div>
+                                    <div className="field-row cols-2">
+                                        <div className="field">
+                                            <label>Corner radius</label>
+                                            <input type="number" className="panel-input" value={comp.borderRadius || 0} onChange={e => updateComponentProp(comp.id, 'borderRadius', Math.max(0, parseInt(e.target.value) || 0))} />
+                                        </div>
+                                        <div className="field">
+                                            <label>Rotation (°)</label>
+                                            <input type="number" className="panel-input" value={comp.rotation || 0} onChange={e => updateComponentProp(comp.id, 'rotation', parseInt(e.target.value) || 0)} />
+                                        </div>
+                                    </div>
                                     <div className="field">
                                         <label>Entrance</label>
                                         <select className="panel-select" value={comp.animation} onChange={e => updateComponentProp(comp.id, 'animation', e.target.value)}>
-                                            {comp.inactiveBehavior === 'dimmed' ? (
+                                            {getBehaviors(comp).before === 'dim' ? (
                                                 <>
                                                     <option value="dim-scale-rotate-left">Scale & rotate left</option>
                                                     <option value="dim-scale-rotate-right">Scale & rotate right</option>
@@ -268,13 +281,19 @@ export const SidebarRight = () => {
                                             )}
                                         </select>
                                     </div>
-                                    <div className="field">
-                                        <label>When line is inactive</label>
-                                        <select className="panel-select" value={comp.inactiveBehavior || 'hidden'} onChange={e => updateComponentProp(comp.id, 'inactiveBehavior', e.target.value)}>
-                                            <option value="hidden">Hide, keep its space</option>
-                                            <option value="collapse">Collapse the space</option>
-                                            <option value="dimmed">Dim in place</option>
-                                        </select>
+                                    <div className="field-row cols-2">
+                                        <div className="field">
+                                            <label>Before its moment</label>
+                                            <select className="panel-select" value={getBehaviors(comp).before} onChange={e => updateComponentProp(comp.id, 'beforeBehavior', e.target.value)}>
+                                                {BEHAVIOR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="field">
+                                            <label>After its moment</label>
+                                            <select className="panel-select" value={getBehaviors(comp).after} onChange={e => updateComponentProp(comp.id, 'afterBehavior', e.target.value)}>
+                                                {BEHAVIOR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
