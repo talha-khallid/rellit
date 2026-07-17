@@ -1,22 +1,39 @@
 import React, { useContext, useRef, useState, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { AudioWaveform } from '../components/AudioWaveform';
+import { clampMediaWindow } from '../utils/mediaLayout';
 
 export const Timeline = () => {
-    const { 
+    const {
         segments, visualLines, lineSettings, updateLineSettings,
         isPlaying, togglePlayback,
         currentLineIndex, setCurrentLineIndex,
         timelineScale, setTimelineScale,
         setCurrentSelectionCharIds,
-        currentTimeRef
+        currentTimeRef,
+        mediaItems, setMediaItems,
+        selectedMediaId, setSelectedMediaId,
+        activeMediaId,
+        setActiveTab
     } = useContext(EditorContext);
 
     const [isResizing, setIsResizing] = useState(false);
     const [resizeLineIdx, setResizeLineIdx] = useState(-1);
     const [startX, setStartX] = useState(0);
     const [initialDur, setInitialDur] = useState(0);
-    
+
+    // Big-image block: drag-to-move
+    const [isMovingMedia, setIsMovingMedia] = useState(false);
+    const [moveMediaId, setMoveMediaId] = useState(null);
+    const [moveStartX, setMoveStartX] = useState(0);
+    const [moveOrigStart, setMoveOrigStart] = useState(0);
+
+    // Big-image block: drag-to-resize (duration)
+    const [isResizingMedia, setIsResizingMedia] = useState(false);
+    const [resizeMediaId, setResizeMediaId] = useState(null);
+    const [mediaResizeStartX, setMediaResizeStartX] = useState(0);
+    const [mediaInitialDur, setMediaInitialDur] = useState(0);
+
     const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
     const scrollAreaRef = useRef(null);
     const timelineContentRef = useRef(null);
@@ -176,6 +193,22 @@ export const Timeline = () => {
                 }
                 
                 updateLineSettings(visualLines, newSettings, segments);
+            } else if (isMovingMedia) {
+                const deltaTime = (e.clientX - moveStartX) / timelineScale;
+                const current = mediaItems.find(m => m.id === moveMediaId);
+                if (current) {
+                    const desiredStart = Math.max(0, moveOrigStart + deltaTime);
+                    const { start, duration } = clampMediaWindow(mediaItems, moveMediaId, desiredStart, current.duration, totalTime);
+                    setMediaItems(mediaItems.map(m => m.id === moveMediaId ? { ...m, start, duration } : m));
+                }
+            } else if (isResizingMedia) {
+                const deltaTime = (e.clientX - mediaResizeStartX) / timelineScale;
+                const current = mediaItems.find(m => m.id === resizeMediaId);
+                if (current) {
+                    const newDur = Math.max(0.2, mediaInitialDur + deltaTime);
+                    const { start, duration } = clampMediaWindow(mediaItems, resizeMediaId, current.start, newDur, totalTime);
+                    setMediaItems(mediaItems.map(m => m.id === resizeMediaId ? { ...m, start, duration } : m));
+                }
             } else if (isDraggingPlayhead) {
                 seekTimeline(e);
             }
@@ -184,6 +217,8 @@ export const Timeline = () => {
         const handleMouseUp = () => {
             if (isResizing) setIsResizing(false);
             if (isDraggingPlayhead) setIsDraggingPlayhead(false);
+            if (isMovingMedia) setIsMovingMedia(false);
+            if (isResizingMedia) setIsResizingMedia(false);
         };
 
         document.addEventListener('mousemove', handleMouseMove);
@@ -193,7 +228,12 @@ export const Timeline = () => {
             document.removeEventListener('mouseup', handleMouseUp);
         };
         // eslint-disable-next-line
-    }, [isResizing, isDraggingPlayhead, startX, initialDur, timelineScale, resizeLineIdx, lineSettings, visualLines, segments]);
+    }, [
+        isResizing, isDraggingPlayhead, startX, initialDur, timelineScale, resizeLineIdx, lineSettings, visualLines, segments,
+        isMovingMedia, moveMediaId, moveStartX, moveOrigStart,
+        isResizingMedia, resizeMediaId, mediaResizeStartX, mediaInitialDur,
+        mediaItems, totalTime
+    ]);
     useEffect(() => {
         const area = scrollAreaRef.current;
         if (!area) return;
@@ -335,14 +375,49 @@ export const Timeline = () => {
                                 const blockWidth = Math.max(1, ab.duration * timelineScale - 1);
                                 return (
                                     <div key={ab.index} className="timeline-block audio-block" style={{ left: ab.start * timelineScale, width: blockWidth, top: 0, padding: 0, height: '100%' }}>
-                                        <AudioWaveform 
-                                            audioBuffer={ab.audioBuffer} 
-                                            width={blockWidth} 
-                                            height={28} 
+                                        <AudioWaveform
+                                            audioBuffer={ab.audioBuffer}
+                                            width={blockWidth}
+                                            height={28}
                                         />
                                     </div>
                                 );
                             })}
+                        </div>
+
+                        <div className="track media-track" data-label="Big Images">
+                            {mediaItems.map(item => (
+                                <div
+                                    key={item.id}
+                                    className={`timeline-block media-block ${activeMediaId === item.id ? 'active' : ''} ${selectedMediaId === item.id ? 'selected' : ''}`}
+                                    style={{ left: item.start * timelineScale, width: Math.max(4, item.duration * timelineScale), top: 0, height: '100%' }}
+                                    onMouseDown={(e) => {
+                                        if (e.target.closest('.resize-handle-right')) return;
+                                        if (isPlaying) togglePlayback();
+                                        setSelectedMediaId(item.id);
+                                        setActiveTab('bigMedia');
+                                        setIsMovingMedia(true);
+                                        setMoveMediaId(item.id);
+                                        setMoveStartX(e.clientX);
+                                        setMoveOrigStart(item.start);
+                                        e.stopPropagation();
+                                    }}
+                                >
+                                    <img src={item.src} alt="" className="media-block-thumb" />
+                                    <span className="block-text-label">Image</span>
+                                    <div
+                                        className="resize-handle-right"
+                                        onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            setIsResizingMedia(true);
+                                            setResizeMediaId(item.id);
+                                            setMediaResizeStartX(e.clientX);
+                                            setMediaInitialDur(item.duration);
+                                            if (isPlaying) togglePlayback();
+                                        }}
+                                    />
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>

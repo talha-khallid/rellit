@@ -1,5 +1,6 @@
 import * as Mp4Muxer from 'mp4-muxer';
 import { hexToRgb } from './colorUtils';
+import { getMediaFrame, computeCropGeometry, CAPTION_EXPANDED_EM, CAPTION_COMPACT_EM, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, TEXT_COLUMN_PAD_LEFT } from './mediaLayout';
 
 // Trace a rounded-rectangle path (for clipping inline images with a corner
 // radius). Kept manual instead of ctx.roundRect for maximum canvas support.
@@ -20,12 +21,14 @@ export async function exportVideo({
     lineSettings,
     charsData,
     imagesData = [],
+    mediaItems = [],
     fpsInput,
     scrollBox,
     setProgress,
     onComplete,
     onError,
     videoBgColor,
+    videoAlignPercent = 50,
     exportScale = 1,
     fontFamily = 'Inter, sans-serif',
     fontWeight = 500,
@@ -171,6 +174,20 @@ export async function exportVideo({
             }
         }
 
+        // Preload big scene images
+        const preloadedMediaImages = {};
+        for (let item of mediaItems) {
+            if (!preloadedMediaImages[item.src]) {
+                const img = new Image();
+                img.src = item.src;
+                await new Promise((resolve) => {
+                    img.onload = resolve;
+                    img.onerror = resolve;
+                });
+                preloadedMediaImages[item.src] = img;
+            }
+        }
+
         let currentTimeMs = 0;
         const frameTimeMs = 1000 / fps;
 
@@ -200,7 +217,28 @@ export async function exportVideo({
             const timeInLineMs = currentTimeMs - lineStartTimeMs;
             const activeLineSpans = visualLines[activeIdx];
             const settings = lineSettings[activeIdx];
-            const containerHeight = scrollBox.h;
+
+            // The caption window shrinks while a big image is on screen (see
+            // Preview.jsx's caption-scroll-container); replicate that here by
+            // computing the SAME em-based height from the current media frame's
+            // progress, instead of using the once-captured static scrollBox.h.
+            const mediaFrame = getMediaFrame(mediaItems, currentTimeMs / 1000);
+            const mediaProgress = mediaFrame ? mediaFrame.progress : 0;
+            const containerHeightEm = CAPTION_EXPANDED_EM - (CAPTION_EXPANDED_EM - CAPTION_COMPACT_EM) * mediaProgress;
+            const containerHeight = containerHeightEm * fontSize;
+            // videoAlignPercent anchors the caption block's vertical CENTER
+            // (CSS: top:X%; transform:translateY(-50%)), independent of height.
+            const anchorCenterY = (videoAlignPercent / 100) * 1920;
+            const dynScrollY = anchorCenterY - containerHeight / 2;
+            // Big images sit directly above the COMPACT caption band (auto-aligned
+            // to it, not overlapping), matching Preview.jsx's fixed anchor formula.
+            // Horizontally they use EQUAL left/right margins — the text column's own
+            // padding is intentionally asymmetric (54/157, for platform UI chrome),
+            // so scrollBox.x/w (the text column's bounds) can't be reused here.
+            const captionCompactTop = anchorCenterY - (CAPTION_COMPACT_EM * fontSize) / 2;
+            const mediaImageBottom = captionCompactTop - MEDIA_IMAGE_GAP;
+            const mediaImageWidth = 1080 - TEXT_COLUMN_PAD_LEFT * 2;
+            const mediaImageLeft = TEXT_COLUMN_PAD_LEFT;
 
             const targetTranslation = (containerHeight / 2) - (activeLineSpans[0].offsetTop + activeLineSpans[0].offsetHeight / 2);
             let prevTranslation = targetTranslation;
@@ -218,6 +256,35 @@ export async function exportVideo({
 
             ctx.fillStyle = videoBgColor || '#050505';
             ctx.fillRect(0, 0, 1080, 1920);
+
+            // Draw the big scene image (if any is on/animating on/off screen) BEFORE
+            // the captions, so text renders on top — mirrors Preview.jsx's DOM order.
+            // It sits directly above the compact caption band, not overlapping it.
+            if (mediaFrame) {
+                const img = preloadedMediaImages[mediaFrame.item.src];
+                if (img && img.width) {
+                    const boxW = mediaImageWidth;
+                    const boxX = mediaImageLeft;
+                    const boxH = mediaFrame.item.height;
+                    const boxY = mediaImageBottom - boxH + (mediaFrame.item.offsetY || 0);
+                    const geo = computeCropGeometry(img.width, img.height, boxW, boxH, mediaFrame.item.fit, mediaFrame.item.focalX, mediaFrame.item.focalY, mediaFrame.item.zoom);
+                    if (geo) {
+                        ctx.save();
+                        ctx.globalAlpha = mediaProgress;
+                        const revealScale = 0.92 + 0.08 * mediaProgress;
+                        ctx.translate(boxX + boxW / 2, boxY + boxH / 2);
+                        ctx.scale(revealScale, revealScale);
+                        roundRectPath(ctx, -boxW / 2, -boxH / 2, boxW, boxH, MEDIA_IMAGE_RADIUS);
+                        ctx.clip();
+                        if (geo.mode === 'contain') {
+                            ctx.drawImage(img, 0, 0, img.width, img.height, -geo.dw / 2, -geo.dh / 2, geo.dw, geo.dh);
+                        } else {
+                            ctx.drawImage(img, geo.sx, geo.sy, geo.sw, geo.sh, -boxW / 2, -boxH / 2, boxW, boxH);
+                        }
+                        ctx.restore();
+                    }
+                }
+            }
 
             // cubic-bezier(0.4, 0, 0.2, 1) approximation - Material Design standard easing
             const cubicEase = (t) => {
@@ -475,17 +542,23 @@ export async function exportVideo({
             }
 
             ctx.shadowBlur = 0;
-            const grad = ctx.createLinearGradient(0, scrollBox.y, 0, scrollBox.y + scrollBox.h);
+            const grad = ctx.createLinearGradient(0, dynScrollY, 0, dynScrollY + containerHeight);
             grad.addColorStop(0, bgRgba); grad.addColorStop(0.15, bgRgba75);
             grad.addColorStop(0.40, bgRgba0); grad.addColorStop(0.60, bgRgba0);
             grad.addColorStop(0.85, bgRgba75); grad.addColorStop(1.0, bgRgba);
 
             ctx.fillStyle = grad;
-            ctx.fillRect(0, scrollBox.y, 1080, scrollBox.h);
+            ctx.fillRect(0, dynScrollY, 1080, containerHeight);
 
-            ctx.fillStyle = videoBgColor || '#050505';
-            ctx.fillRect(0, 0, 1080, scrollBox.y);
-            ctx.fillRect(0, scrollBox.y + scrollBox.h, 1080, 1920 - (scrollBox.y + scrollBox.h));
+            // This erases any text-shadow bleed above/below the caption band back
+            // to solid background — but a big image legitimately occupies that
+            // same outer space while it's on/animating, so skip it then (the
+            // image was drawn earlier this frame and must survive to the output).
+            if (!mediaFrame) {
+                ctx.fillStyle = videoBgColor || '#050505';
+                ctx.fillRect(0, 0, 1080, dynScrollY);
+                ctx.fillRect(0, dynScrollY + containerHeight, 1080, 1920 - (dynScrollY + containerHeight));
+            }
 
             const videoFrame = new VideoFrame(offscreenCanvas, { timestamp: currentTimeMs * 1000 });
             videoEncoder.encode(videoFrame, { keyFrame: frame % 30 === 0 });

@@ -98,6 +98,13 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
     const [customComponents, setCustomComponents] = useState([]);
     const [armedComponentId, setArmedComponentId] = useState(null);
 
+    // Big (scene) images — full-width photos that sit behind the captions
+    const [mediaItems, setMediaItems] = useState([]);
+    const [selectedMediaId, setSelectedMediaId] = useState(null);
+    // Which big image (if any) is on-screen right now, kept in sync by
+    // Preview's playback tick / seek handling so Timeline can also read it.
+    const [activeMediaId, setActiveMediaId] = useState(null);
+
     // Load project from the SQLite-backed API
     useEffect(() => {
         if (!projectId) return;
@@ -126,6 +133,9 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
             setVisualLines(data.visualLines || []);
             setLineSettings(data.lineSettings || {});
             setCharOverrides(data.charOverrides || {});
+            setMediaItems(data.mediaItems || []);
+            setSelectedMediaId(null);
+            setActiveMediaId(null);
         });
 
         return () => { cancelled = true; };
@@ -169,7 +179,8 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
                 // and Preview re-measures lines from the DOM on load anyway.
                 visualLines: visualLines.map(line => line.map(({ el: _el, ...rest }) => rest)),
                 lineSettings,
-                charOverrides
+                charOverrides,
+                mediaItems
             })
                 .then(() => setSaveStatus('saved'))
                 .catch(err => {
@@ -182,7 +193,8 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
     }, [
         projectId, segments, videoBgColor, videoAlignPercent,
         fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing,
-        timelineScale, customComponents, visualLines, lineSettings, charOverrides
+        timelineScale, customComponents, visualLines, lineSettings, charOverrides,
+        mediaItems
     ]);
 
     // Helper: Enforce Audio constraints
@@ -302,6 +314,9 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
         activeTab, setActiveTab,
         customComponents, setCustomComponents,
         armedComponentId, setArmedComponentId,
+        mediaItems, setMediaItems,
+        selectedMediaId, setSelectedMediaId,
+        activeMediaId, setActiveMediaId,
         saveStatus,
         onGoHome
     };

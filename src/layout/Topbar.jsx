@@ -13,12 +13,13 @@ export const Topbar = ({ scrollBox, charsData, imagesData }) => {
         segments,
         visualLines, lineSettings,
         isPlaying, togglePlayback,
-        videoBgColor,
+        videoBgColor, videoAlignPercent,
         fontFamily, fontWeight, fontSize, textTransform,
         onGoHome,
         projectName,
         updateName,
-        saveStatus
+        saveStatus,
+        mediaItems
     } = useContext(EditorContext);
 
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -75,9 +76,11 @@ export const Topbar = ({ scrollBox, charsData, imagesData }) => {
             lineSettings,
             charsData,
             imagesData,
+            mediaItems,
             fpsInput: exportFps,
             scrollBox,
             videoBgColor,
+            videoAlignPercent,
             exportScale,
             fontFamily,
             fontWeight,

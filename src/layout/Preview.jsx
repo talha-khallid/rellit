@@ -1,6 +1,8 @@
 import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { getBehaviors, newComponentDefaults } from '../utils/componentStyle';
+import { CroppedImage } from '../components/CroppedImage';
+import { CAPTION_EXPANDED_EM, CAPTION_COMPACT_EM, MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, TEXT_COLUMN_PAD_LEFT, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, getActiveMediaItem } from '../utils/mediaLayout';
 
 export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const { 
@@ -18,7 +20,8 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         videoBgColor, videoAlignPercent,
         fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing,
         customComponents, setCustomComponents, setSegments,
-        armedComponentId, setArmedComponentId
+        armedComponentId, setArmedComponentId,
+        mediaItems, activeMediaId, setActiveMediaId
     } = useContext(EditorContext);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -275,18 +278,23 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
 
     useEffect(() => {
         if (visualLines.length === 0 || !trackRef.current || !scrollContainerRef.current) return;
-        
+
         const activeLineSpans = visualLines[currentLineIndex];
         if (!activeLineSpans || activeLineSpans.length === 0) return;
 
-        const containerHeight = scrollContainerRef.current.clientHeight;
+        // Computed analytically (not read from the live DOM) so this stays
+        // correct even mid-transition while the scroll-container's own height
+        // is CSS-animating between expanded/compact (see caption-scroll-container
+        // below) — a DOM read here could catch a stale pre-transition height.
+        const containerHeightEm = activeMediaId ? CAPTION_COMPACT_EM : CAPTION_EXPANDED_EM;
+        const containerHeight = containerHeightEm * fontSize;
         const lineTop = activeLineSpans[0].offsetTop;
         const lineHeight = activeLineSpans[0].offsetHeight;
-        
+
         const translation = (containerHeight / 2) - (lineTop + lineHeight / 2);
         trackRef.current.style.transform = `translateY(${translation}px)`;
-        
-    }, [currentLineIndex, visualLines]);
+
+    }, [currentLineIndex, visualLines, activeMediaId, fontSize]);
 
     useLayoutEffect(() => {
         const updateScreenScale = () => {
@@ -393,6 +401,11 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
             setCurrentTimeDisplay(formatTime(currentTimeRef.current));
             setTotalTimeDisplay(formatTime(totalDur));
 
+            // Sync active big image (React bails out of the re-render if the id
+            // is unchanged, so this is cheap to call every frame)
+            const activeMedia = getActiveMediaItem(mediaItems, currentTimeRef.current);
+            setActiveMediaId(activeMedia ? activeMedia.id : null);
+
             // Sync Line Index
             let tAcc = 0;
             let newIdx = 0;
@@ -450,18 +463,29 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
             cancelAnimationFrame(frameId);
         };
         // eslint-disable-next-line
-    }, [isPlaying, isLooping, visualLines, segments]);
+    }, [isPlaying, isLooping, visualLines, segments, mediaItems]);
 
     useEffect(() => {
         const handleSeek = () => {
             if (!isPlaying) {
                 setCurrentTimeDisplay(formatTime(currentTimeRef.current));
                 setTotalTimeDisplay(formatTime(getTotalDuration()));
+                const activeMedia = getActiveMediaItem(mediaItems, currentTimeRef.current);
+                setActiveMediaId(activeMedia ? activeMedia.id : null);
             }
         };
         window.addEventListener('timeupdate-seek', handleSeek);
         return () => window.removeEventListener('timeupdate-seek', handleSeek);
-    }, [isPlaying, getTotalDuration]);
+    }, [isPlaying, getTotalDuration, mediaItems, setActiveMediaId]);
+
+    // Keep the active big image in sync when items are added/edited/deleted
+    // while paused (e.g. typing in the Media tab's Start/Duration fields).
+    useEffect(() => {
+        if (isPlaying) return;
+        const activeMedia = getActiveMediaItem(mediaItems, currentTimeRef.current);
+        setActiveMediaId(activeMedia ? activeMedia.id : null);
+        // eslint-disable-next-line
+    }, [mediaItems]);
 
     // Navigation Helpers
     const setTimeAndSync = (newTime) => {
@@ -681,6 +705,17 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         return () => document.removeEventListener('selectionchange', handleSelection);
     }, [isPlaying, currentSelectionCharIds, setCurrentSelectionCharIds]);
 
+    // Big images are horizontally centered with the SAME margin on both sides
+    // (the text column's own left/right padding is intentionally asymmetric —
+    // 54px / 157px — to leave room for platform UI chrome, so the image can't
+    // just reuse it). They sit directly above the (compacted) caption block,
+    // auto-aligned to it, not overlapping it.
+    const mediaImageWidth = 1080 - TEXT_COLUMN_PAD_LEFT * 2;
+    const mediaImageLeft = TEXT_COLUMN_PAD_LEFT;
+    const mediaAnchorCenterY = (videoAlignPercent / 100) * 1920;
+    const captionCompactTop = mediaAnchorCenterY - (CAPTION_COMPACT_EM * fontSize) / 2;
+    const mediaImageBottom = captionCompactTop - MEDIA_IMAGE_GAP;
+
     let selectionHasUniformOverride = false;
     if (currentSelectionCharIds.length > 0) {
         const firstId = currentSelectionCharIds[0];
@@ -775,19 +810,52 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                             textAlign: textAlign
                         }}
                     >
-                        <div 
-                            className="caption-wrapper" 
-                            style={{ 
+                        {/* Big scene images — rendered behind the captions (DOM order = paint
+                            order here, both are plain position:absolute siblings), each
+                            individually faded/scaled in or out via CSS transition so they
+                            animate smoothly even while staying mounted. */}
+                        {mediaItems.map(item => (
+                            <div
+                                key={item.id}
+                                style={{
+                                    position: 'absolute',
+                                    left: mediaImageLeft,
+                                    width: mediaImageWidth,
+                                    height: item.height,
+                                    top: mediaImageBottom - item.height + (item.offsetY || 0),
+                                    transform: `scale(${activeMediaId === item.id ? 1 : 0.92})`,
+                                    opacity: activeMediaId === item.id ? 1 : 0,
+                                    borderRadius: MEDIA_IMAGE_RADIUS,
+                                    overflow: 'hidden',
+                                    pointerEvents: 'none',
+                                    transition: `opacity ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, transform ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`
+                                }}
+                            >
+                                <CroppedImage
+                                    src={item.src}
+                                    boxW={mediaImageWidth}
+                                    boxH={item.height}
+                                    fit={item.fit}
+                                    focalX={item.focalX}
+                                    focalY={item.focalY}
+                                    zoom={item.zoom}
+                                />
+                            </div>
+                        ))}
+
+                        <div
+                            className="caption-wrapper"
+                            style={{
                                 position: 'absolute',
                                 top: `${videoAlignPercent}%`,
                                 transform: 'translateY(-50%)',
                                 left: 0,
-                                width: '100%', 
-                                paddingLeft: 54, 
-                                paddingRight: 157, 
-                                boxSizing: 'border-box', 
-                                fontSize: fontSize, 
-                                lineHeight: 1.45 
+                                width: '100%',
+                                paddingLeft: 54,
+                                paddingRight: 157,
+                                boxSizing: 'border-box',
+                                fontSize: fontSize,
+                                lineHeight: 1.45
                             }}
                         >
                             <div 
@@ -795,7 +863,10 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                 id="scroll-container" 
                                 ref={scrollContainerRef}
                                 style={{
-                                    width: '100%', height: '10.15em', overflow: 'hidden', position: 'relative',
+                                    width: '100%',
+                                    height: `${activeMediaId ? CAPTION_COMPACT_EM : CAPTION_EXPANDED_EM}em`,
+                                    transition: `height ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`,
+                                    overflow: 'hidden', position: 'relative',
                                     WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 15%, rgba(0,0,0,1) 40%, rgba(0,0,0,1) 60%, rgba(0,0,0,0.25) 85%, rgba(0,0,0,0) 100%)',
                                     maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 15%, rgba(0,0,0,1) 40%, rgba(0,0,0,1) 60%, rgba(0,0,0,0.25) 85%, rgba(0,0,0,0) 100%)'
                                 }}

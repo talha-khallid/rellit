@@ -67,7 +67,8 @@ export const createProject = async () => {
         customComponents: [],
         visualLines: [],
         lineSettings: {},
-        charOverrides: {}
+        charOverrides: {},
+        mediaItems: []
     };
 
     await jsonPost(BASE, 'POST', { id, name, lastModified, data });

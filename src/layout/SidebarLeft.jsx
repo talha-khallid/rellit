@@ -2,6 +2,7 @@ import React, { useContext, useState, useRef, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { CustomColorPicker } from '../components/CustomColorPicker';
 import { ComponentCreator } from '../components/ComponentCreator';
+import { MediaLibrary } from '../components/MediaLibrary';
 
 // --- Dynamic Waveform Component ---
 const Waveform = ({ audioBuffer }) => {
@@ -376,6 +377,8 @@ export const SidebarLeft = () => {
                     </div>
                 ) : activeTab === 'components' ? (
                     <ComponentCreator />
+                ) : activeTab === 'bigMedia' ? (
+                    <MediaLibrary />
                 ) : null}
             </div>
         </div>
