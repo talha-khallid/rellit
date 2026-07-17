@@ -936,11 +936,15 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                                         borderRadius: spaceIsSelected ? 2 : 0
                                                                     }}
                                                                 >
-                                                                    {' '}
-                                                                </span>
-                                                            );
-                                                        })()}
-                                                    </span>
+                                                                    {/* Non-breaking space: a plain trailing space is the last child of the
+                                                                        inline-block image wrapper, so the browser collapses it to zero
+                                                                        width and the gap after the image vanishes. \u00A0 never collapses,
+                                                                        keeping real space between the image and the following text. */}
+                                                                    {'\u00A0'}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </span>
                                                 ) : (
                                                     <span 
                                                         className={`word ${active ? 'active-word' : ''}`}
