@@ -163,15 +163,6 @@ export const MediaLibrary = () => {
                                                 </button>
                                             </div>
                                         </div>
-                                        <div className="field">
-                                            <label>Vertical position</label>
-                                            <input
-                                                type="number" className="panel-input"
-                                                value={item.offsetY || 0}
-                                                onChange={e => updateItem(item.id, { offsetY: parseInt(e.target.value) || 0 })}
-                                            />
-                                            <p className="field-hint">Nudges the image up (negative) or down (positive) from its default spot just above the text.</p>
-                                        </div>
                                     </div>
                                 )}
                             </div>

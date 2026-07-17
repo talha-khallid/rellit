@@ -32,19 +32,48 @@ export const TEXT_COLUMN_PAD_RIGHT = 157;
 // Corner radius applied to every big image, in both the live preview and export.
 export const MEDIA_IMAGE_RADIUS = 20;
 
-// Vertical gap (px, in the 1080x1920 logical space) between the image's
-// bottom edge and the compact caption block's top edge.
-export const MEDIA_IMAGE_GAP = 24;
+// Fixed margin (px, 1080x1920 logical space) between the image and the caption
+// block within the centered container.
+export const MEDIA_IMAGE_GAP = 28;
+
+// Screen height in the logical 1080x1920 space.
+export const SCREEN_H = 1920;
 
 export const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
-// cubic-bezier(0.4, 0, 0.2, 1) approximation for canvas/export (no native CSS
-// easing there), matching the curve used elsewhere in exportEngine.js.
-export const mediaEase = (t) => {
-    if (t <= 0) return 0;
-    if (t >= 1) return 1;
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+// Exact cubic-bezier(0.4, 0, 0.2, 1) evaluator — the SAME curve the preview's
+// CSS transitions use — so the export's per-frame progress matches the browser
+// animation precisely (not just approximately). Solves x=t via Newton's method,
+// then samples y.
+const makeCubicBezier = (x1, y1, x2, y2) => {
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+    const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    const sampleX = (t) => ((ax * t + bx) * t + cx) * t;
+    const sampleY = (t) => ((ay * t + by) * t + cy) * t;
+    const sampleDX = (t) => (3 * ax * t + 2 * bx) * t + cx;
+    return (x) => {
+        if (x <= 0) return 0;
+        if (x >= 1) return 1;
+        let t = x;
+        for (let i = 0; i < 8; i++) {
+            const xErr = sampleX(t) - x;
+            if (Math.abs(xErr) < 1e-6) return sampleY(t);
+            const d = sampleDX(t);
+            if (Math.abs(d) < 1e-6) break;
+            t -= xErr / d;
+        }
+        let lo = 0, hi = 1;
+        t = x;
+        for (let i = 0; i < 20; i++) {
+            const xe = sampleX(t);
+            if (Math.abs(xe - x) < 1e-6) break;
+            if (x > xe) lo = t; else hi = t;
+            t = (lo + hi) / 2;
+        }
+        return sampleY(t);
+    };
 };
+export const mediaEase = makeCubicBezier(0.4, 0, 0.2, 1);
 
 export const isMediaActiveAt = (item, timeSec) =>
     timeSec >= item.start && timeSec < item.start + item.duration;
@@ -126,13 +155,59 @@ export const computeCropGeometry = (natW, natH, boxW, boxH, fit, focalX, focalY,
 };
 
 export const newMediaItemDefaults = () => ({
-    height: 869, // square by default — box width is always the text column width
+    height: 760, // box width is always the equal-margin text width (972)
     fit: 'cover',
     focalX: 0.5,
     focalY: 0.5,
-    zoom: 1,
-    // px, in the 1080x1920 logical space. Shifts the image from its default
-    // auto-aligned spot (just above the caption block). Positive = down
-    // (toward the text), negative = up (away from it).
-    offsetY: 0
+    zoom: 1
 });
+
+// The single source of truth for the on-screen layout at a given animation
+// `progress` (0 = no image / captions at rest, 1 = image fully shown / captions
+// compact). Both the live preview (at progress 0 or 1, letting CSS interpolate
+// between) and the export engine (per-frame at the eased progress) call this,
+// so they can never drift. Default layout: image on top + gap + compact caption,
+// the whole group CENTERED on the screen.
+//
+// The image top is fixed at the group's final (progress=1) position; only the
+// caption slides/shrinks and the image fades+scales in, so both settle together.
+export const getMediaGeometry = (item, progress, fontSize, videoAlignPercent = 50) => {
+    const expandedH = CAPTION_EXPANDED_EM * fontSize;
+    const compactH = CAPTION_COMPACT_EM * fontSize;
+    // At rest the caption sits where the user aligned it; captionShift is measured
+    // from there so nothing jumps when there's no image.
+    const restCenter = (videoAlignPercent / 100) * SCREEN_H;
+    const captionHeight = expandedH + (compactH - expandedH) * progress;
+
+    if (!item) {
+        return { captionHeight, captionCenterY: restCenter, captionShift: 0, image: null };
+    }
+
+    const A = item.height;
+    const G = MEDIA_IMAGE_GAP;
+    // When fully shown, the container [image | gap | compact caption] is centered
+    // on the screen. Work out where the caption lands in that centered container,
+    // then interpolate toward it by progress.
+    const activeCaptionCenter = SCREEN_H / 2 + (A + G) / 2;
+    const captionShift = (activeCaptionCenter - restCenter) * progress;
+    const captionCenterY = restCenter + captionShift;
+    const containerTop = SCREEN_H / 2 - (A + G + compactH) / 2; // == final image top
+
+    const image = {
+        left: TEXT_COLUMN_PAD_LEFT,
+        width: 1080 - TEXT_COLUMN_PAD_LEFT * 2,
+        top: containerTop,
+        height: A,
+        opacity: progress,
+        scale: 0.92 + 0.08 * progress
+    };
+    return { captionHeight, captionCenterY, captionShift, image };
+};
+
+// Per-frame geometry for the export engine (finds the active/animating item).
+export const getMediaFrameGeometry = (mediaItems, timeSec, fontSize, videoAlignPercent = 50) => {
+    const frame = getMediaFrame(mediaItems, timeSec);
+    const item = frame ? frame.item : null;
+    const progress = frame ? frame.progress : 0;
+    return { ...getMediaGeometry(item, progress, fontSize, videoAlignPercent), item, progress };
+};

@@ -1,6 +1,6 @@
 import * as Mp4Muxer from 'mp4-muxer';
 import { hexToRgb } from './colorUtils';
-import { getMediaFrame, computeCropGeometry, CAPTION_EXPANDED_EM, CAPTION_COMPACT_EM, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, TEXT_COLUMN_PAD_LEFT } from './mediaLayout';
+import { getMediaFrameGeometry, computeCropGeometry, MEDIA_IMAGE_RADIUS } from './mediaLayout';
 
 // Trace a rounded-rectangle path (for clipping inline images with a corner
 // radius). Kept manual instead of ctx.roundRect for maximum canvas support.
@@ -218,39 +218,27 @@ export async function exportVideo({
             const activeLineSpans = visualLines[activeIdx];
             const settings = lineSettings[activeIdx];
 
-            // The caption window shrinks while a big image is on screen (see
-            // Preview.jsx's caption-scroll-container); replicate that here by
-            // computing the SAME em-based height from the current media frame's
-            // progress, instead of using the once-captured static scrollBox.h.
-            const mediaFrame = getMediaFrame(mediaItems, currentTimeMs / 1000);
-            const mediaProgress = mediaFrame ? mediaFrame.progress : 0;
-            const containerHeightEm = CAPTION_EXPANDED_EM - (CAPTION_EXPANDED_EM - CAPTION_COMPACT_EM) * mediaProgress;
-            const containerHeight = containerHeightEm * fontSize;
-            // videoAlignPercent anchors the caption block's vertical CENTER
-            // (CSS: top:X%; transform:translateY(-50%)), independent of height.
-            const anchorCenterY = (videoAlignPercent / 100) * 1920;
-            const dynScrollY = anchorCenterY - containerHeight / 2;
-            // Big images sit directly above the COMPACT caption band (auto-aligned
-            // to it, not overlapping), matching Preview.jsx's fixed anchor formula.
-            // Horizontally they use EQUAL left/right margins — the text column's own
-            // padding is intentionally asymmetric (54/157, for platform UI chrome),
-            // so scrollBox.x/w (the text column's bounds) can't be reused here.
-            const captionCompactTop = anchorCenterY - (CAPTION_COMPACT_EM * fontSize) / 2;
-            const mediaImageBottom = captionCompactTop - MEDIA_IMAGE_GAP;
-            const mediaImageWidth = 1080 - TEXT_COLUMN_PAD_LEFT * 2;
-            const mediaImageLeft = TEXT_COLUMN_PAD_LEFT;
+            // Caption + big-image geometry for this frame — the SAME function the
+            // live preview uses (getMediaFrameGeometry), so the animated shrink,
+            // caption re-centering, and image reveal match the editor exactly.
+            const media = getMediaFrameGeometry(mediaItems, currentTimeMs / 1000, fontSize, videoAlignPercent);
+            const bandTop = media.captionCenterY - media.captionHeight / 2;
+            const bandH = media.captionHeight;
 
-            const targetTranslation = (containerHeight / 2) - (activeLineSpans[0].offsetTop + activeLineSpans[0].offsetHeight / 2);
+            // baseY is captured relative to the caption's rest CENTER (the track is
+            // CSS-anchored at the scroll-container's center), so we only pull the
+            // active line to that center (-lineCenter), then add the media shift
+            // that slides the caption into the centered [image|gap|caption] group.
+            const activeLineCenter = activeLineSpans[0].offsetTop + activeLineSpans[0].offsetHeight / 2;
+            const targetTranslation = -activeLineCenter;
             let prevTranslation = targetTranslation;
-
             if (activeIdx > 0 && timeInLineMs < 600) {
                 const prevSpans = visualLines[activeIdx - 1];
-                prevTranslation = (containerHeight / 2) - (prevSpans[0].offsetTop + prevSpans[0].offsetHeight / 2);
+                prevTranslation = -(prevSpans[0].offsetTop + prevSpans[0].offsetHeight / 2);
             }
-
             let trackProgress = Math.min(timeInLineMs / 600, 1.0);
             trackProgress = 1 - Math.pow(1 - trackProgress, 4);
-            const currentTranslation = prevTranslation + (targetTranslation - prevTranslation) * trackProgress;
+            const currentTranslation = prevTranslation + (targetTranslation - prevTranslation) * trackProgress + media.captionShift;
 
             let colorProgress = Math.min(timeInLineMs / 100, 1.0);
 
@@ -259,21 +247,16 @@ export async function exportVideo({
 
             // Draw the big scene image (if any is on/animating on/off screen) BEFORE
             // the captions, so text renders on top — mirrors Preview.jsx's DOM order.
-            // It sits directly above the compact caption band, not overlapping it.
-            if (mediaFrame) {
-                const img = preloadedMediaImages[mediaFrame.item.src];
+            if (media.item && media.image) {
+                const img = preloadedMediaImages[media.item.src];
                 if (img && img.width) {
-                    const boxW = mediaImageWidth;
-                    const boxX = mediaImageLeft;
-                    const boxH = mediaFrame.item.height;
-                    const boxY = mediaImageBottom - boxH + (mediaFrame.item.offsetY || 0);
-                    const geo = computeCropGeometry(img.width, img.height, boxW, boxH, mediaFrame.item.fit, mediaFrame.item.focalX, mediaFrame.item.focalY, mediaFrame.item.zoom);
+                    const { left: boxX, width: boxW, top: boxY, height: boxH } = media.image;
+                    const geo = computeCropGeometry(img.width, img.height, boxW, boxH, media.item.fit, media.item.focalX, media.item.focalY, media.item.zoom);
                     if (geo) {
                         ctx.save();
-                        ctx.globalAlpha = mediaProgress;
-                        const revealScale = 0.92 + 0.08 * mediaProgress;
+                        ctx.globalAlpha = media.image.opacity;
                         ctx.translate(boxX + boxW / 2, boxY + boxH / 2);
-                        ctx.scale(revealScale, revealScale);
+                        ctx.scale(media.image.scale, media.image.scale);
                         roundRectPath(ctx, -boxW / 2, -boxH / 2, boxW, boxH, MEDIA_IMAGE_RADIUS);
                         ctx.clip();
                         if (geo.mode === 'contain') {
@@ -285,6 +268,14 @@ export async function exportVideo({
                     }
                 }
             }
+
+            // Clip all caption text + inline images to the (animating) caption band
+            // so nothing spills over the big image above it — the band's soft edges
+            // are handled by the gradient overlay drawn after.
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(0, bandTop, 1080, bandH);
+            ctx.clip();
 
             // cubic-bezier(0.4, 0, 0.2, 1) approximation - Material Design standard easing
             const cubicEase = (t) => {
@@ -541,23 +532,31 @@ export async function exportVideo({
                 }
             }
 
+            // Close the caption-band clip opened before the text/inline-image loops.
+            ctx.restore();
+
             ctx.shadowBlur = 0;
-            const grad = ctx.createLinearGradient(0, dynScrollY, 0, dynScrollY + containerHeight);
+            const grad = ctx.createLinearGradient(0, bandTop, 0, bandTop + bandH);
             grad.addColorStop(0, bgRgba); grad.addColorStop(0.15, bgRgba75);
             grad.addColorStop(0.40, bgRgba0); grad.addColorStop(0.60, bgRgba0);
             grad.addColorStop(0.85, bgRgba75); grad.addColorStop(1.0, bgRgba);
 
             ctx.fillStyle = grad;
-            ctx.fillRect(0, dynScrollY, 1080, containerHeight);
+            ctx.fillRect(0, bandTop, 1080, bandH);
 
-            // This erases any text-shadow bleed above/below the caption band back
-            // to solid background — but a big image legitimately occupies that
-            // same outer space while it's on/animating, so skip it then (the
-            // image was drawn earlier this frame and must survive to the output).
-            if (!mediaFrame) {
-                ctx.fillStyle = videoBgColor || '#050505';
-                ctx.fillRect(0, 0, 1080, dynScrollY);
-                ctx.fillRect(0, dynScrollY + containerHeight, 1080, 1920 - (dynScrollY + containerHeight));
+            // Fill solid background outside the caption band. When a big image is on
+            // screen it occupies the space above the band, so erase only up to the
+            // image (never over it) plus the gap below it and everything below the band.
+            ctx.fillStyle = videoBgColor || '#050505';
+            if (media.item && media.image) {
+                const imgTop = media.image.top;
+                const imgBottom = media.image.top + media.image.height;
+                ctx.fillRect(0, 0, 1080, Math.max(0, imgTop));
+                if (bandTop > imgBottom) ctx.fillRect(0, imgBottom, 1080, bandTop - imgBottom);
+                ctx.fillRect(0, bandTop + bandH, 1080, 1920 - (bandTop + bandH));
+            } else {
+                ctx.fillRect(0, 0, 1080, bandTop);
+                ctx.fillRect(0, bandTop + bandH, 1080, 1920 - (bandTop + bandH));
             }
 
             const videoFrame = new VideoFrame(offscreenCanvas, { timestamp: currentTimeMs * 1000 });

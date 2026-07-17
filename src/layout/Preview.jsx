@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 
 import { EditorContext } from '../context/EditorContext';
 import { getBehaviors, newComponentDefaults } from '../utils/componentStyle';
 import { CroppedImage } from '../components/CroppedImage';
-import { CAPTION_EXPANDED_EM, CAPTION_COMPACT_EM, MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, TEXT_COLUMN_PAD_LEFT, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, getActiveMediaItem } from '../utils/mediaLayout';
+import { MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, MEDIA_IMAGE_RADIUS, getMediaGeometry, getActiveMediaItem } from '../utils/mediaLayout';
 
 export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const { 
@@ -282,19 +282,16 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         const activeLineSpans = visualLines[currentLineIndex];
         if (!activeLineSpans || activeLineSpans.length === 0) return;
 
-        // Computed analytically (not read from the live DOM) so this stays
-        // correct even mid-transition while the scroll-container's own height
-        // is CSS-animating between expanded/compact (see caption-scroll-container
-        // below) — a DOM read here could catch a stale pre-transition height.
-        const containerHeightEm = activeMediaId ? CAPTION_COMPACT_EM : CAPTION_EXPANDED_EM;
-        const containerHeight = containerHeightEm * fontSize;
+        // The track is CSS-anchored at the scroll-container's vertical CENTER
+        // (top:50%), so we only pull it up by the active line's offset to sit that
+        // line at the center. This is height-INDEPENDENT: as the container height
+        // animates (image reveal), the center stays the center, so the active line
+        // never drifts — no per-frame recompute needed.
         const lineTop = activeLineSpans[0].offsetTop;
         const lineHeight = activeLineSpans[0].offsetHeight;
+        trackRef.current.style.transform = `translateY(${-(lineTop + lineHeight / 2)}px)`;
 
-        const translation = (containerHeight / 2) - (lineTop + lineHeight / 2);
-        trackRef.current.style.transform = `translateY(${translation}px)`;
-
-    }, [currentLineIndex, visualLines, activeMediaId, fontSize]);
+    }, [currentLineIndex, visualLines]);
 
     useLayoutEffect(() => {
         const updateScreenScale = () => {
@@ -705,16 +702,13 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         return () => document.removeEventListener('selectionchange', handleSelection);
     }, [isPlaying, currentSelectionCharIds, setCurrentSelectionCharIds]);
 
-    // Big images are horizontally centered with the SAME margin on both sides
-    // (the text column's own left/right padding is intentionally asymmetric —
-    // 54px / 157px — to leave room for platform UI chrome, so the image can't
-    // just reuse it). They sit directly above the (compacted) caption block,
-    // auto-aligned to it, not overlapping it.
-    const mediaImageWidth = 1080 - TEXT_COLUMN_PAD_LEFT * 2;
-    const mediaImageLeft = TEXT_COLUMN_PAD_LEFT;
-    const mediaAnchorCenterY = (videoAlignPercent / 100) * 1920;
-    const captionCompactTop = mediaAnchorCenterY - (CAPTION_COMPACT_EM * fontSize) / 2;
-    const mediaImageBottom = captionCompactTop - MEDIA_IMAGE_GAP;
+    // Caption + big-image geometry. At rest (no active image) the caption sits at
+    // videoAlignPercent, expanded. When an image is active the whole group
+    // [image | gap | compact caption] is centered on screen. We compute the two
+    // endpoints and let CSS transitions interpolate; the export engine computes
+    // the SAME geometry per frame (getMediaGeometry) so they stay identical.
+    const activeMediaItem = mediaItems.find(m => m.id === activeMediaId) || null;
+    const captionGeo = getMediaGeometry(activeMediaItem, activeMediaItem ? 1 : 0, fontSize, videoAlignPercent);
 
     let selectionHasUniformOverride = false;
     if (currentSelectionCharIds.length > 0) {
@@ -810,44 +804,48 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                             textAlign: textAlign
                         }}
                     >
-                        {/* Big scene images — rendered behind the captions (DOM order = paint
-                            order here, both are plain position:absolute siblings), each
-                            individually faded/scaled in or out via CSS transition so they
-                            animate smoothly even while staying mounted. */}
-                        {mediaItems.map(item => (
-                            <div
-                                key={item.id}
-                                style={{
-                                    position: 'absolute',
-                                    left: mediaImageLeft,
-                                    width: mediaImageWidth,
-                                    height: item.height,
-                                    top: mediaImageBottom - item.height + (item.offsetY || 0),
-                                    transform: `scale(${activeMediaId === item.id ? 1 : 0.92})`,
-                                    opacity: activeMediaId === item.id ? 1 : 0,
-                                    borderRadius: MEDIA_IMAGE_RADIUS,
-                                    overflow: 'hidden',
-                                    pointerEvents: 'none',
-                                    transition: `opacity ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, transform ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`
-                                }}
-                            >
-                                <CroppedImage
-                                    src={item.src}
-                                    boxW={mediaImageWidth}
-                                    boxH={item.height}
-                                    fit={item.fit}
-                                    focalX={item.focalX}
-                                    focalY={item.focalY}
-                                    zoom={item.zoom}
-                                />
-                            </div>
-                        ))}
+                        {/* Big scene images — each positioned at its final spot in the
+                            centered [image | gap | compact caption] container, and faded +
+                            scaled in/out via CSS transition. Painted before the caption so
+                            text sits on top. */}
+                        {mediaItems.map(item => {
+                            const g = getMediaGeometry(item, 1, fontSize, videoAlignPercent).image;
+                            const shown = activeMediaId === item.id;
+                            return (
+                                <div
+                                    key={item.id}
+                                    style={{
+                                        position: 'absolute',
+                                        left: g.left,
+                                        width: g.width,
+                                        height: g.height,
+                                        top: g.top,
+                                        transform: `scale(${shown ? 1 : 0.92})`,
+                                        opacity: shown ? 1 : 0,
+                                        borderRadius: MEDIA_IMAGE_RADIUS,
+                                        overflow: 'hidden',
+                                        pointerEvents: 'none',
+                                        transition: `opacity ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, transform ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`
+                                    }}
+                                >
+                                    <CroppedImage
+                                        src={item.src}
+                                        boxW={g.width}
+                                        boxH={g.height}
+                                        fit={item.fit}
+                                        focalX={item.focalX}
+                                        focalY={item.focalY}
+                                        zoom={item.zoom}
+                                    />
+                                </div>
+                            );
+                        })}
 
                         <div
                             className="caption-wrapper"
                             style={{
                                 position: 'absolute',
-                                top: `${videoAlignPercent}%`,
+                                top: captionGeo.captionCenterY,
                                 transform: 'translateY(-50%)',
                                 left: 0,
                                 width: '100%',
@@ -855,16 +853,17 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                 paddingRight: 157,
                                 boxSizing: 'border-box',
                                 fontSize: fontSize,
-                                lineHeight: 1.45
+                                lineHeight: 1.45,
+                                transition: `top ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`
                             }}
                         >
-                            <div 
-                                className="caption-scroll-container" 
-                                id="scroll-container" 
+                            <div
+                                className="caption-scroll-container"
+                                id="scroll-container"
                                 ref={scrollContainerRef}
                                 style={{
                                     width: '100%',
-                                    height: `${activeMediaId ? CAPTION_COMPACT_EM : CAPTION_EXPANDED_EM}em`,
+                                    height: captionGeo.captionHeight,
                                     transition: `height ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`,
                                     overflow: 'hidden', position: 'relative',
                                     WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 15%, rgba(0,0,0,1) 40%, rgba(0,0,0,1) 60%, rgba(0,0,0,0.25) 85%, rgba(0,0,0,0) 100%)',
@@ -876,7 +875,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                     scrubToLine(e.deltaY > 0 ? 1 : -1);
                                 }}
                             >
-                                <div className="caption-track" id="caption-track" ref={trackRef} style={{ position: 'relative', transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.3, 1)', willChange: 'transform', textAlign: textAlign }}>
+                                <div className="caption-track" id="caption-track" ref={trackRef} style={{ position: 'absolute', top: '50%', left: 0, width: '100%', transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.3, 1)', willChange: 'transform', textAlign: textAlign }}>
                                     {renderedWords.map((word, wIdx) => {
                                         let active = false;
                                         if (visualLines[currentLineIndex]) {
