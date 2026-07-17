@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 
 import { EditorContext } from '../context/EditorContext';
 import { getBehaviors, newComponentDefaults } from '../utils/componentStyle';
 import { CroppedImage } from '../components/CroppedImage';
-import { MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, MEDIA_IMAGE_RADIUS, getMediaGeometry, getActiveMediaItem } from '../utils/mediaLayout';
+import { MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, TEXT_COLUMN_PAD_LEFT, getMediaGeometry, getActiveMediaItem } from '../utils/mediaLayout';
 
 export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const { 
@@ -544,11 +544,17 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         
         const wrapperEl = screenEl.querySelector('.caption-wrapper');
         const originalWrapperCss = wrapperEl ? wrapperEl.style.cssText : '';
+        // The caption's flex group is a positioned ancestor; neutralize it so the
+        // wrapper's forced absolute position below anchors to the SCREEN (not the
+        // group), giving baseY relative to the caption's rest center.
+        const groupEl = screenEl.querySelector('.caption-group');
+        const originalGroupPos = groupEl ? groupEl.style.position : '';
         const trackEl = trackRef.current;
 
         document.body.appendChild(screenEl);
 
         screenEl.style.cssText = `width: 1080px !important; height: 1920px !important; max-width: none !important; position: absolute !important; top: 0 !important; left: 0 !important; z-index: -1000 !important; transform: scale(1) !important; display: block !important; background-color: ${videoBgColor} !important; border-radius: 0 !important; font-family: ${fontFamily} !important; letter-spacing: ${letterSpacing}px !important; text-transform: ${textTransform} !important; text-align: ${textAlign} !important;`;
+        if (groupEl) groupEl.style.position = 'static';
         if (wrapperEl) {
             wrapperEl.style.cssText = `position: absolute !important; top: ${videoAlignPercent}% !important; transform: translateY(-50%) !important; left: 0 !important; width: 100% !important; padding-left: 54px !important; padding-right: 157px !important; box-sizing: border-box !important; font-size: ${fontSize}px !important; line-height: 1.45 !important;`;
         }
@@ -658,6 +664,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
 
         screenEl.style.cssText = originalCssText;
         if (wrapperEl) wrapperEl.style.cssText = originalWrapperCss;
+        if (groupEl) groupEl.style.position = originalGroupPos;
         trackEl.style.transform = originalTrackTransform;
 
         if (originalNextSibling) {
@@ -804,57 +811,31 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                             textAlign: textAlign
                         }}
                     >
-                        {/* Big scene images — each positioned at its final spot in the
-                            centered [image | gap | compact caption] container, and faded +
-                            scaled in/out via CSS transition. Painted before the caption so
-                            text sits on top. */}
-                        {mediaItems.map(item => {
-                            const g = getMediaGeometry(item, 1, fontSize, videoAlignPercent).image;
-                            const shown = activeMediaId === item.id;
-                            return (
-                                <div
-                                    key={item.id}
-                                    style={{
-                                        position: 'absolute',
-                                        left: g.left,
-                                        width: g.width,
-                                        height: g.height,
-                                        top: g.top,
-                                        transform: `scale(${shown ? 1 : 0.92})`,
-                                        opacity: shown ? 1 : 0,
-                                        borderRadius: MEDIA_IMAGE_RADIUS,
-                                        overflow: 'hidden',
-                                        pointerEvents: 'none',
-                                        transition: `opacity ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, transform ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`
-                                    }}
-                                >
-                                    <CroppedImage
-                                        src={item.src}
-                                        boxW={g.width}
-                                        boxH={g.height}
-                                        fit={item.fit}
-                                        focalX={item.focalX}
-                                        focalY={item.focalY}
-                                        zoom={item.zoom}
-                                    />
-                                </div>
-                            );
-                        })}
-
+                        {/* Centered group — caption block, then image block(s) below it.
+                            A real CSS flex column: the caption and the image are flow
+                            siblings, so they can never overlap while animating, and
+                            translateY(-50%) keeps the group centered as its children resize
+                            during the reveal. */}
+                        <div className="caption-group" style={{
+                            position: 'absolute',
+                            top: `${videoAlignPercent}%`,
+                            left: 0,
+                            width: '100%',
+                            transform: 'translateY(-50%)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'stretch'
+                        }}>
                         <div
                             className="caption-wrapper"
                             style={{
-                                position: 'absolute',
-                                top: captionGeo.captionCenterY,
-                                transform: 'translateY(-50%)',
-                                left: 0,
+                                position: 'relative',
                                 width: '100%',
                                 paddingLeft: 54,
                                 paddingRight: 157,
                                 boxSizing: 'border-box',
                                 fontSize: fontSize,
-                                lineHeight: 1.45,
-                                transition: `top ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`
+                                lineHeight: 1.45
                             }}
                         >
                             <div
@@ -1130,6 +1111,45 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                     })}
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Image block(s) — real flow siblings below the caption. Each
+                            reserves growing height (0→A) so it opens in beneath the text
+                            without ever overlapping it; the inner image is centered so it
+                            reveals middle-out while fading in. */}
+                        {mediaItems.map(item => {
+                            const shown = activeMediaId === item.id;
+                            const imgW = 1080 - TEXT_COLUMN_PAD_LEFT * 2;
+                            return (
+                                <div
+                                    key={item.id}
+                                    style={{
+                                        alignSelf: 'center',
+                                        position: 'relative',
+                                        width: imgW,
+                                        height: shown ? item.height : 0,
+                                        marginTop: shown ? MEDIA_IMAGE_GAP : 0,
+                                        opacity: shown ? 1 : 0,
+                                        overflow: 'hidden',
+                                        borderRadius: MEDIA_IMAGE_RADIUS,
+                                        pointerEvents: 'none',
+                                        transition: `height ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, margin-top ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, opacity ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`
+                                    }}
+                                >
+                                    <div style={{ position: 'absolute', top: '50%', left: 0, width: '100%', height: item.height, transform: 'translateY(-50%)' }}>
+                                        <CroppedImage
+                                            src={item.src}
+                                            boxW={imgW}
+                                            boxH={item.height}
+                                            fit={item.fit}
+                                            focalX={item.focalX}
+                                            focalY={item.focalY}
+                                            zoom={item.zoom}
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        })}
                         </div>
                     </div>
                 </div>

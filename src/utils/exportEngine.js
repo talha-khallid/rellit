@@ -245,24 +245,26 @@ export async function exportVideo({
             ctx.fillStyle = videoBgColor || '#050505';
             ctx.fillRect(0, 0, 1080, 1920);
 
-            // Draw the big scene image (if any is on/animating on/off screen) BEFORE
-            // the captions, so text renders on top — mirrors Preview.jsx's DOM order.
-            if (media.item && media.image) {
+            // Draw the big scene image below the caption. Mirrors Preview.jsx: the
+            // image is full-height and vertically centered inside a growing window
+            // (clipTop..clipTop+clipHeight), so it reveals middle-out as it fades in.
+            if (media.item && media.image && media.image.clipHeight > 0) {
                 const img = preloadedMediaImages[media.item.src];
                 if (img && img.width) {
-                    const { left: boxX, width: boxW, top: boxY, height: boxH } = media.image;
-                    const geo = computeCropGeometry(img.width, img.height, boxW, boxH, media.item.fit, media.item.focalX, media.item.focalY, media.item.zoom);
+                    const { left, width, fullHeight, clipTop, clipHeight, centerY, opacity } = media.image;
+                    const geo = computeCropGeometry(img.width, img.height, width, fullHeight, media.item.fit, media.item.focalX, media.item.focalY, media.item.zoom);
                     if (geo) {
                         ctx.save();
-                        ctx.globalAlpha = media.image.opacity;
-                        ctx.translate(boxX + boxW / 2, boxY + boxH / 2);
-                        ctx.scale(media.image.scale, media.image.scale);
-                        roundRectPath(ctx, -boxW / 2, -boxH / 2, boxW, boxH, MEDIA_IMAGE_RADIUS);
+                        ctx.globalAlpha = opacity;
+                        // Clip to the revealed window, then draw the full-height image
+                        // centered in it.
+                        roundRectPath(ctx, left, clipTop, width, clipHeight, Math.min(MEDIA_IMAGE_RADIUS, clipHeight / 2));
                         ctx.clip();
+                        const imgTop = centerY - fullHeight / 2;
                         if (geo.mode === 'contain') {
-                            ctx.drawImage(img, 0, 0, img.width, img.height, -geo.dw / 2, -geo.dh / 2, geo.dw, geo.dh);
+                            ctx.drawImage(img, 0, 0, img.width, img.height, left + (width - geo.dw) / 2, imgTop + (fullHeight - geo.dh) / 2, geo.dw, geo.dh);
                         } else {
-                            ctx.drawImage(img, geo.sx, geo.sy, geo.sw, geo.sh, -boxW / 2, -boxH / 2, boxW, boxH);
+                            ctx.drawImage(img, geo.sx, geo.sy, geo.sw, geo.sh, left, imgTop, width, fullHeight);
                         }
                         ctx.restore();
                     }
@@ -545,15 +547,15 @@ export async function exportVideo({
             ctx.fillRect(0, bandTop, 1080, bandH);
 
             // Fill solid background outside the caption band. When a big image is on
-            // screen it occupies the space above the band, so erase only up to the
-            // image (never over it) plus the gap below it and everything below the band.
+            // screen it sits BELOW the band, so erase above the band, the gap between
+            // band and image, and below the image — never over the image itself.
             ctx.fillStyle = videoBgColor || '#050505';
-            if (media.item && media.image) {
-                const imgTop = media.image.top;
-                const imgBottom = media.image.top + media.image.height;
-                ctx.fillRect(0, 0, 1080, Math.max(0, imgTop));
-                if (bandTop > imgBottom) ctx.fillRect(0, imgBottom, 1080, bandTop - imgBottom);
-                ctx.fillRect(0, bandTop + bandH, 1080, 1920 - (bandTop + bandH));
+            if (media.item && media.image && media.image.clipHeight > 0) {
+                const imgTop = media.image.clipTop;
+                const imgBottom = media.image.clipTop + media.image.clipHeight;
+                ctx.fillRect(0, 0, 1080, bandTop);
+                if (imgTop > bandTop + bandH) ctx.fillRect(0, bandTop + bandH, 1080, imgTop - (bandTop + bandH));
+                ctx.fillRect(0, imgBottom, 1080, 1920 - imgBottom);
             } else {
                 ctx.fillRect(0, 0, 1080, bandTop);
                 ctx.fillRect(0, bandTop + bandH, 1080, 1920 - (bandTop + bandH));

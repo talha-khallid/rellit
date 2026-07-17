@@ -164,18 +164,19 @@ export const newMediaItemDefaults = () => ({
 
 // The single source of truth for the on-screen layout at a given animation
 // `progress` (0 = no image / captions at rest, 1 = image fully shown / captions
-// compact). Both the live preview (at progress 0 or 1, letting CSS interpolate
-// between) and the export engine (per-frame at the eased progress) call this,
-// so they can never drift. Default layout: image on top + gap + compact caption,
-// the whole group CENTERED on the screen.
+// compact). It models exactly what a centered CSS flex column does:
 //
-// The image top is fixed at the group's final (progress=1) position; only the
-// caption slides/shrinks and the image fades+scales in, so both settle together.
+//     [ caption block (height animates expanded→compact) ]
+//     [ gap (0→G) ]
+//     [ image block (height animates 0→A, reveals middle-out) ]
+//
+// the whole group vertically centered at the caption's anchor (videoAlignPercent).
+// Because the image reserves real, growing space below the text — never absolute
+// space over it — the two can never overlap while animating. The live preview
+// literally IS this flex layout; the export engine reproduces these numbers.
 export const getMediaGeometry = (item, progress, fontSize, videoAlignPercent = 50) => {
     const expandedH = CAPTION_EXPANDED_EM * fontSize;
     const compactH = CAPTION_COMPACT_EM * fontSize;
-    // At rest the caption sits where the user aligned it; captionShift is measured
-    // from there so nothing jumps when there's no image.
     const restCenter = (videoAlignPercent / 100) * SCREEN_H;
     const captionHeight = expandedH + (compactH - expandedH) * progress;
 
@@ -184,22 +185,22 @@ export const getMediaGeometry = (item, progress, fontSize, videoAlignPercent = 5
     }
 
     const A = item.height;
-    const G = MEDIA_IMAGE_GAP;
-    // When fully shown, the container [image | gap | compact caption] is centered
-    // on the screen. Work out where the caption lands in that centered container,
-    // then interpolate toward it by progress.
-    const activeCaptionCenter = SCREEN_H / 2 + (A + G) / 2;
-    const captionShift = (activeCaptionCenter - restCenter) * progress;
-    const captionCenterY = restCenter + captionShift;
-    const containerTop = SCREEN_H / 2 - (A + G + compactH) / 2; // == final image top
+    const gapReserved = MEDIA_IMAGE_GAP * progress;
+    const imgReserved = A * progress;               // grows in below the text
+    const groupH = captionHeight + gapReserved + imgReserved;
+    const groupTop = restCenter - groupH / 2;        // group stays centered
+    const captionCenterY = groupTop + captionHeight / 2;
+    const captionShift = captionCenterY - restCenter; // caption drifts up as image grows
+    const imgBlockTop = groupTop + captionHeight + gapReserved;
 
     const image = {
         left: TEXT_COLUMN_PAD_LEFT,
         width: 1080 - TEXT_COLUMN_PAD_LEFT * 2,
-        top: containerTop,
-        height: A,
-        opacity: progress,
-        scale: 0.92 + 0.08 * progress
+        fullHeight: A,                       // the image's full drawn height
+        clipTop: imgBlockTop,                // visible (revealed) window …
+        clipHeight: imgReserved,             // … which grows 0→A
+        centerY: imgBlockTop + imgReserved / 2,
+        opacity: progress
     };
     return { captionHeight, captionCenterY, captionShift, image };
 };
