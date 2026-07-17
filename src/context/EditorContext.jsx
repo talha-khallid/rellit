@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
-import { loadProject, saveProjectData, getProjects, updateProjectName } from '../utils/storage';
+import { loadProject, saveProjectData, updateProjectName } from '../utils/storage';
 
 export const EditorContext = createContext();
 
@@ -98,20 +98,20 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
     const [customComponents, setCustomComponents] = useState([]);
     const [armedComponentId, setArmedComponentId] = useState(null);
 
-    // Sync from localStorage
+    // Load project from the SQLite-backed API
     useEffect(() => {
         if (!projectId) return;
-        
-        const projects = getProjects();
-        const activeProj = projects.find(p => p.id === projectId);
-        if (activeProj) {
-            setProjectName(activeProj.name);
-        } else {
-            setProjectName('Untitled Project');
-        }
+        let cancelled = false;
 
-        const data = loadProject(projectId);
-        if (data) {
+        loadProject(projectId).then(project => {
+            if (cancelled) return;
+            if (!project) {
+                setProjectName('Untitled Project');
+                return;
+            }
+            setProjectName(project.name || 'Untitled Project');
+
+            const data = project.data || {};
             setSegments(data.segments || []);
             setVideoBgColor(data.videoBgColor || '#050505');
             setVideoAlignPercent(data.videoAlignPercent ?? 50);
@@ -121,11 +121,14 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
             setFontSize(data.fontSize || 45);
             setTextAlign(data.textAlign || 'left');
             setLetterSpacing(data.letterSpacing || 0);
+            setTimelineScale(data.timelineScale || 70);
             setCustomComponents(data.customComponents || []);
             setVisualLines(data.visualLines || []);
             setLineSettings(data.lineSettings || {});
             setCharOverrides(data.charOverrides || {});
-        }
+        });
+
+        return () => { cancelled = true; };
     }, [projectId]);
 
     const updateName = useCallback((newName) => {
@@ -160,21 +163,26 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
                 fontSize,
                 textAlign,
                 letterSpacing,
+                timelineScale,
                 customComponents,
                 // Strip live DOM references (span.el) — they can't be serialized
                 // and Preview re-measures lines from the DOM on load anyway.
                 visualLines: visualLines.map(line => line.map(({ el: _el, ...rest }) => rest)),
                 lineSettings,
                 charOverrides
-            });
-            setSaveStatus('saved');
+            })
+                .then(() => setSaveStatus('saved'))
+                .catch(err => {
+                    console.error('Autosave failed', err);
+                    setSaveStatus('error');
+                });
         }, 1000);
-        
+
         return () => clearTimeout(saveTimer);
     }, [
         projectId, segments, videoBgColor, videoAlignPercent,
         fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing,
-        customComponents, visualLines, lineSettings, charOverrides
+        timelineScale, customComponents, visualLines, lineSettings, charOverrides
     ]);
 
     // Helper: Enforce Audio constraints

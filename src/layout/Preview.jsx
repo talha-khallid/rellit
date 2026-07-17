@@ -37,6 +37,13 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const lineTimerRef = useRef(null);
     const [renderedWords, setRenderedWords] = useState([]);
 
+    // Always hand the re-measurement the LATEST line durations. lineSettings is
+    // intentionally kept out of the measure effect's deps (adding it would loop),
+    // so without this ref the effect would preserve a stale snapshot and silently
+    // revert edits (e.g. a duration change) on the next resize/font-load pass.
+    const lineSettingsRef = useRef(lineSettings);
+    useEffect(() => { lineSettingsRef.current = lineSettings; }, [lineSettings]);
+
     const formatTime = (secs) => {
         if (isNaN(secs) || secs < 0) return '00:00';
         const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -196,12 +203,14 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         
         if (renderedWords.length === 0) {
             setVisualLines([]);
-            updateLineSettings([], lineSettings, segments);
+            updateLineSettings([], lineSettingsRef.current, segments);
             return;
         }
-        
+
+        let cancelled = false;
+
         const calculateVisualLines = () => {
-            if (!trackRef.current) return;
+            if (cancelled || !trackRef.current) return;
             const wordSpans = trackRef.current.querySelectorAll('.word');
             const newVisualLines = [];
             let currentLine = [];
@@ -230,23 +239,31 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                 }
             });
             if (currentLine.length > 0) newVisualLines.push(currentLine);
-            
+
             setVisualLines(newVisualLines);
-            updateLineSettings(newVisualLines, lineSettings, segments);
+            updateLineSettings(newVisualLines, lineSettingsRef.current, segments);
         };
 
-        calculateVisualLines();
         let resizeTimeout;
         const handleResize = () => {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(calculateVisualLines, 50);
         };
-
         window.addEventListener('resize', handleResize);
+
+        // Measure only once the (async Google) webfont is ready. Measuring with
+        // the fallback font wraps text differently, producing a different number
+        // of visual lines than the saved layout — which makes updateLineSettings
+        // delete/recreate line entries and clobber saved per-line durations.
+        // fonts.ready resolves on the next microtask when the font is cached, so
+        // there's no perceptible delay on subsequent loads.
         document.fonts.ready.then(calculateVisualLines);
-        const fallbackTimer = setTimeout(calculateVisualLines, 200);
+        // Safety net if fonts.ready never settles: measure once after a short
+        // delay, by which point the webfont has almost certainly applied.
+        const fallbackTimer = setTimeout(calculateVisualLines, 400);
 
         return () => {
+            cancelled = true;
             window.removeEventListener('resize', handleResize);
             clearTimeout(resizeTimeout);
             clearTimeout(fallbackTimer);

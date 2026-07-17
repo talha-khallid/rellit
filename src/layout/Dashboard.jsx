@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getProjects, createProject, deleteProject, updateProjectName, duplicateProject, getProjectMeta } from '../utils/storage';
+import { getProjects, createProject, deleteProject, updateProjectName, duplicateProject } from '../utils/storage';
 
 const hueFromId = (id) => {
     let hash = 0;
@@ -34,13 +34,15 @@ export const Dashboard = ({ onOpenProject }) => {
     const [editName, setEditName] = useState('');
     const [query, setQuery] = useState('');
 
+    const refreshProjects = () => getProjects().then(setProjects);
+
     useEffect(() => {
-        setProjects(getProjects());
+        refreshProjects();
     }, []);
 
     const metaById = useMemo(() => {
         const map = {};
-        projects.forEach(p => { map[p.id] = getProjectMeta(p.id); });
+        projects.forEach(p => { map[p.id] = p.meta; });
         return map;
     }, [projects]);
 
@@ -58,18 +60,18 @@ export const Dashboard = ({ onOpenProject }) => {
         setIsCreating(false);
     };
 
-    const handleDelete = (e, id) => {
+    const handleDelete = async (e, id) => {
         e.stopPropagation();
         if (confirm('Are you sure you want to delete this project?')) {
-            deleteProject(id);
-            setProjects(getProjects());
+            await deleteProject(id);
+            await refreshProjects();
         }
     };
 
-    const handleDuplicate = (e, id) => {
+    const handleDuplicate = async (e, id) => {
         e.stopPropagation();
-        duplicateProject(id);
-        setProjects(getProjects());
+        await duplicateProject(id);
+        await refreshProjects();
     };
 
     const startEditing = (e, proj) => {
@@ -78,14 +80,14 @@ export const Dashboard = ({ onOpenProject }) => {
         setEditName(proj.name);
     };
 
-    const saveEdit = (e, id) => {
+    const saveEdit = async (e, id) => {
         if (e) {
             e.stopPropagation();
             e.preventDefault();
         }
         if (editName.trim()) {
-            updateProjectName(id, editName.trim());
-            setProjects(getProjects());
+            await updateProjectName(id, editName.trim());
+            await refreshProjects();
         }
         setEditingId(null);
     };

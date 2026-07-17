@@ -1,29 +1,41 @@
-const STORAGE_KEY = 'rellit_projects';
+// Client-side persistence layer. Talks to the SQLite-backed API that runs
+// inside the Vite server (see server/sqlite-api.js), so all data lives in a
+// real `rellit.db` file on disk instead of browser storage. Every function is
+// async because it goes over HTTP.
+const BASE = '/api/projects';
 
-export const getProjects = () => {
+const request = async (url, options) => {
+    const res = await fetch(url, options);
+    if (!res.ok) {
+        let detail = '';
+        try { detail = (await res.json()).error; } catch { /* ignore */ }
+        throw new Error(`Request to ${url} failed (${res.status})${detail ? `: ${detail}` : ''}`);
+    }
+    if (res.status === 204) return null;
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+};
+
+const jsonPost = (url, method, body) => request(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+});
+
+// Returns [{ id, name, lastModified, meta: { segmentCount, totalDuration, firstText } }]
+export const getProjects = async () => {
     try {
-        const data = localStorage.getItem(STORAGE_KEY);
-        if (!data) return [];
-        return JSON.parse(data).sort((a, b) => b.lastModified - a.lastModified);
+        return await request(BASE);
     } catch (e) {
         console.error('Failed to load projects from storage', e);
         return [];
     }
 };
 
-const saveProjectsList = (projects) => {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-    } catch (e) {
-        console.error('Failed to save projects to storage', e);
-    }
-};
-
 export const createProject = async () => {
-    const projects = getProjects();
     const id = 'proj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    
-    // Fetch initial layout
+
+    // Fetch initial layout (served from /public)
     let initialSegments = [];
     try {
         const res = await fetch('/captions.json');
@@ -36,18 +48,12 @@ export const createProject = async () => {
         ];
     }
 
-    const newProject = {
-        id,
-        name: `Untitled Project ${projects.length + 1}`,
-        lastModified: Date.now(),
-        // We only save the metadata in the main list to keep it lightweight.
-    };
+    // Name it based on how many projects already exist.
+    const existing = await getProjects();
+    const name = `Untitled Project ${existing.length + 1}`;
+    const lastModified = Date.now();
 
-    projects.push(newProject);
-    saveProjectsList(projects);
-
-    // Save the actual bulky project data in a separate key to avoid JSON parsing a massive array on dashboard load.
-    const projectData = {
+    const data = {
         segments: initialSegments,
         videoBgColor: '#050505',
         videoAlignPercent: 50,
@@ -57,96 +63,49 @@ export const createProject = async () => {
         fontSize: 45,
         textAlign: 'left',
         letterSpacing: 0,
+        timelineScale: 70,
         customComponents: [],
         visualLines: [],
         lineSettings: {},
         charOverrides: {}
     };
 
-    saveProjectData(id, projectData);
-    
-    return newProject;
+    await jsonPost(BASE, 'POST', { id, name, lastModified, data });
+    return { id, name, lastModified };
 };
 
-export const loadProject = (id) => {
+// Returns { id, name, lastModified, data } or null
+export const loadProject = async (id) => {
     try {
-        const data = localStorage.getItem(`rellit_data_${id}`);
-        if (!data) return null;
-        return JSON.parse(data);
+        return await request(`${BASE}/${id}`);
     } catch (e) {
         console.error(`Failed to load data for project ${id}`, e);
         return null;
     }
 };
 
-export const saveProjectData = (id, data) => {
+export const saveProjectData = async (id, data) => {
+    return jsonPost(`${BASE}/${id}`, 'PUT', { data });
+};
+
+export const updateProjectName = async (id, newName) => {
+    return jsonPost(`${BASE}/${id}`, 'PATCH', { name: newName });
+};
+
+export const duplicateProject = async (id) => {
     try {
-        localStorage.setItem(`rellit_data_${id}`, JSON.stringify(data));
-        
-        // Update the lastModified timestamp
-        const projects = getProjects();
-        const pIdx = projects.findIndex(p => p.id === id);
-        if (pIdx > -1) {
-            projects[pIdx].lastModified = Date.now();
-            saveProjectsList(projects);
-        }
+        return await request(`${BASE}/${id}/duplicate`, { method: 'POST' });
     } catch (e) {
-        console.error(`Failed to save data for project ${id}`, e);
+        console.error(`Failed to duplicate project ${id}`, e);
+        return null;
     }
 };
 
-export const updateProjectName = (id, newName) => {
-    const projects = getProjects();
-    const pIdx = projects.findIndex(p => p.id === id);
-    if (pIdx > -1) {
-        projects[pIdx].name = newName;
-        projects[pIdx].lastModified = Date.now();
-        saveProjectsList(projects);
+export const deleteProject = async (id) => {
+    try {
+        return await request(`${BASE}/${id}`, { method: 'DELETE' });
+    } catch (e) {
+        console.error(`Failed to delete project ${id}`, e);
+        return null;
     }
-};
-
-export const duplicateProject = (id) => {
-    const projects = getProjects();
-    const source = projects.find(p => p.id === id);
-    if (!source) return null;
-
-    const newId = 'proj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    const copy = {
-        id: newId,
-        name: `${source.name} (copy)`,
-        lastModified: Date.now()
-    };
-    projects.push(copy);
-    saveProjectsList(projects);
-
-    const data = loadProject(id);
-    if (data) {
-        localStorage.setItem(`rellit_data_${newId}`, JSON.stringify(data));
-    }
-    return copy;
-};
-
-// Lightweight stats for dashboard cards: segment count + total duration.
-export const getProjectMeta = (id) => {
-    const data = loadProject(id);
-    if (!data) return { segmentCount: 0, totalDuration: 0, firstText: '' };
-
-    const lineDurations = Object.values(data.lineSettings || {});
-    let totalDuration = lineDurations.reduce((acc, s) => acc + (parseFloat(s.duration) || 0), 0);
-    if (totalDuration === 0) {
-        totalDuration = (data.segments || []).reduce((acc, s) => acc + (parseFloat(s.duration) || 0), 0);
-    }
-
-    return {
-        segmentCount: (data.segments || []).length,
-        totalDuration,
-        firstText: data.segments?.[0]?.text || ''
-    };
-};
-
-export const deleteProject = (id) => {
-    const projects = getProjects();
-    const newProjects = projects.filter(p => p.id !== id);
-    saveProjectsList(newProjects);
-    localStorage.removeItem(`rellit_data_${id}`);
 };

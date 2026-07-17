@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 
 test.py
+
+# Local SQLite database
+rellit.db
+rellit.db-*
