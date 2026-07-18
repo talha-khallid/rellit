@@ -1,120 +1,130 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { CroppedImage } from './CroppedImage';
-import { computeCropGeometry, clamp } from '../utils/mediaLayout';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { clamp, normalizeCrop, cropOutputHeight } from '../utils/mediaLayout';
 
-const TEXT_COLUMN_WIDTH = 1080 - 54 - 157; // 869 — always the image's true width
-const STAGE_MAX_W = 280;
-const STAGE_MAX_H = 360;
+const STAGE_MAX_W = 320;
+const STAGE_MAX_H = 340;
+const MIN_CROP = 0.05; // smallest crop, as a fraction of the image
 
-const ASPECT_PRESETS = [
-    { label: 'Square', ratio: 1 },
-    { label: 'Portrait', ratio: 4 / 5 },
-    { label: 'Wide', ratio: 16 / 9 }
-];
-
+// Interactive image cropper: the full image shown on top with a draggable /
+// resizable crop rectangle over it. `onChange` receives the normalized crop and
+// the derived output height (kept in aspect so the video image isn't stretched).
 export const MediaCropModal = ({ item, onChange, onClose }) => {
     const [natural, setNatural] = useState(null);
-    const dragRef = useRef(null); // { startX, startY, startFocalX, startFocalY }
-    const [isDragging, setIsDragging] = useState(false);
+    const stageRef = useRef(null);
+    // drag state: { mode: 'move'|'nw'|'ne'|'sw'|'se', startX, startY, startCrop }
+    const dragRef = useRef(null);
+    const [dragging, setDragging] = useState(false);
 
-    const displayScale = Math.min(STAGE_MAX_W / TEXT_COLUMN_WIDTH, STAGE_MAX_H / Math.max(1, item.height));
-    const stageW = TEXT_COLUMN_WIDTH * displayScale;
-    const stageH = item.height * displayScale;
+    const crop = normalizeCrop(item.crop);
+
+    // Fit the image inside the stage box, preserving aspect.
+    let stageW = STAGE_MAX_W, stageH = STAGE_MAX_H;
+    if (natural) {
+        const scale = Math.min(STAGE_MAX_W / natural.w, STAGE_MAX_H / natural.h);
+        stageW = natural.w * scale;
+        stageH = natural.h * scale;
+    }
+
+    const commit = useCallback((newCrop) => {
+        const nc = normalizeCrop(newCrop);
+        const patch = { crop: nc };
+        if (natural) patch.height = cropOutputHeight(natural.w, natural.h, nc);
+        onChange(patch);
+    }, [natural, onChange]);
 
     useEffect(() => {
-        if (!isDragging) return;
+        if (!dragging) return;
         const handleMove = (e) => {
-            if (!dragRef.current || !natural) return;
-            const geo = computeCropGeometry(natural.w, natural.h, stageW, stageH, 'cover', item.focalX, item.focalY, item.zoom);
-            if (!geo || geo.mode !== 'cover') return;
-            const dx = e.clientX - dragRef.current.startX;
-            const dy = e.clientY - dragRef.current.startY;
-            const newFocalX = clamp(dragRef.current.startFocalX - (dx / geo.effScale) / natural.w, 0, 1);
-            const newFocalY = clamp(dragRef.current.startFocalY - (dy / geo.effScale) / natural.h, 0, 1);
-            onChange({ focalX: newFocalX, focalY: newFocalY });
+            const d = dragRef.current;
+            if (!d) return;
+            const dx = (e.clientX - d.startX) / stageW; // in normalized units
+            const dy = (e.clientY - d.startY) / stageH;
+            const s = d.startCrop;
+            let { x, y, w, h } = s;
+
+            if (d.mode === 'move') {
+                x = clamp(s.x + dx, 0, 1 - s.w);
+                y = clamp(s.y + dy, 0, 1 - s.h);
+            } else {
+                // Resize from a corner, keeping the opposite corner fixed.
+                let left = s.x, top = s.y, right = s.x + s.w, bottom = s.y + s.h;
+                if (d.mode.includes('w')) left = clamp(s.x + dx, 0, right - MIN_CROP);
+                if (d.mode.includes('e')) right = clamp(s.x + s.w + dx, left + MIN_CROP, 1);
+                if (d.mode.includes('n')) top = clamp(s.y + dy, 0, bottom - MIN_CROP);
+                if (d.mode.includes('s')) bottom = clamp(s.y + s.h + dy, top + MIN_CROP, 1);
+                x = left; y = top; w = right - left; h = bottom - top;
+            }
+            commit({ x, y, w, h });
         };
-        const handleUp = () => setIsDragging(false);
+        const handleUp = () => setDragging(false);
         window.addEventListener('mousemove', handleMove);
         window.addEventListener('mouseup', handleUp);
         return () => {
             window.removeEventListener('mousemove', handleMove);
             window.removeEventListener('mouseup', handleUp);
         };
-        // eslint-disable-next-line
-    }, [isDragging, natural, stageW, stageH, item.focalX, item.focalY, item.zoom]);
+    }, [dragging, stageW, stageH, commit]);
 
-    const startDrag = (e) => {
-        if (item.fit !== 'cover') return;
-        dragRef.current = { startX: e.clientX, startY: e.clientY, startFocalX: item.focalX ?? 0.5, startFocalY: item.focalY ?? 0.5 };
-        setIsDragging(true);
+    const startDrag = (mode) => (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragRef.current = { mode, startX: e.clientX, startY: e.clientY, startCrop: crop };
+        setDragging(true);
     };
 
-    const applyPreset = (ratio) => {
-        onChange({ height: Math.round(TEXT_COLUMN_WIDTH / ratio) });
+    const box = {
+        left: crop.x * stageW,
+        top: crop.y * stageH,
+        width: crop.w * stageW,
+        height: crop.h * stageH
     };
+
+    const handles = ['nw', 'ne', 'sw', 'se'];
 
     return (
         <div className="export-modal-overlay" onClick={onClose}>
             <div className="export-modal crop-modal" onClick={e => e.stopPropagation()}>
-                <h3>Edit Image</h3>
-                <p className="export-modal-sub">Sized to the caption text width — choose how it fills its area.</p>
+                <h3>Crop Image</h3>
+                <p className="export-modal-sub">Drag the box to move it, or its corners to resize. The video image keeps this crop's shape.</p>
 
-                <div className="export-modal-body">
-                    <label>Fit</label>
-                    <div className="export-fps-row">
-                        <button className={`export-fps-chip ${item.fit === 'contain' ? 'active' : ''}`} onClick={() => onChange({ fit: 'contain' })}>Fit (whole image)</button>
-                        <button className={`export-fps-chip ${item.fit === 'cover' ? 'active' : ''}`} onClick={() => onChange({ fit: 'cover' })}>Fill (crop)</button>
+                <div className="crop-stage-wrap">
+                    <div ref={stageRef} className="crop-stage" style={{ width: stageW, height: stageH }}>
+                        <img
+                            src={item.src}
+                            alt=""
+                            draggable={false}
+                            onLoad={e => setNatural({ w: e.target.naturalWidth, h: e.target.naturalHeight })}
+                            style={{ width: '100%', height: '100%', display: 'block', userSelect: 'none' }}
+                        />
+                        {/* dim overlay outside the crop box (4px border trick via box-shadow) */}
+                        <div
+                            className="crop-box"
+                            style={{ left: box.left, top: box.top, width: box.width, height: box.height, cursor: dragging ? 'grabbing' : 'grab' }}
+                            onMouseDown={startDrag('move')}
+                        >
+                            {handles.map(h => (
+                                <div
+                                    key={h}
+                                    className={`crop-handle crop-handle-${h}`}
+                                    onMouseDown={startDrag(h)}
+                                />
+                            ))}
+                        </div>
                     </div>
                 </div>
 
-                <div
-                    className={`crop-stage ${item.fit === 'cover' ? 'draggable' : ''} ${isDragging ? 'dragging' : ''}`}
-                    style={{ width: stageW, height: stageH }}
-                    onMouseDown={startDrag}
-                >
-                    <CroppedImage
-                        src={item.src}
-                        boxW={stageW}
-                        boxH={stageH}
-                        fit={item.fit}
-                        focalX={item.focalX}
-                        focalY={item.focalY}
-                        zoom={item.zoom}
-                        onNaturalSize={setNatural}
+                <div className="export-modal-body">
+                    <label>Corner radius</label>
+                    <input
+                        type="number"
+                        className="panel-input"
+                        value={item.borderRadius ?? 24}
+                        onChange={e => onChange({ borderRadius: Math.max(0, parseInt(e.target.value) || 0) })}
                     />
                 </div>
 
-                {item.fit === 'cover' && (
-                    <div className="export-modal-body">
-                        <label>Zoom</label>
-                        <input
-                            type="range" min="1" max="3" step="0.05"
-                            value={item.zoom ?? 1}
-                            onChange={e => onChange({ zoom: parseFloat(e.target.value) })}
-                            style={{ width: '100%' }}
-                        />
-                    </div>
-                )}
-
-                <div className="export-modal-body">
-                    <label>Height</label>
-                    <div className="field-row cols-2" style={{ marginBottom: 8 }}>
-                        <input
-                            type="number"
-                            className="panel-input"
-                            value={item.height}
-                            onChange={e => onChange({ height: Math.max(60, parseInt(e.target.value) || 60) })}
-                        />
-                        <button className="btn-ghost" onClick={() => onChange({ focalX: 0.5, focalY: 0.5, zoom: 1 })}>Reset crop</button>
-                    </div>
-                    <div className="export-fps-row">
-                        {ASPECT_PRESETS.map(p => (
-                            <button key={p.label} className="export-fps-chip" onClick={() => applyPreset(p.ratio)}>{p.label}</button>
-                        ))}
-                    </div>
-                </div>
-
                 <div className="export-modal-footer">
+                    <button className="btn-ghost" onClick={() => commit({ x: 0, y: 0, w: 1, h: 1 })}>Reset crop</button>
                     <button className="btn-export-start" onClick={onClose}>Done</button>
                 </div>
             </div>

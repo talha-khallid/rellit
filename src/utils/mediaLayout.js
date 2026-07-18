@@ -130,36 +130,41 @@ export const clampMediaWindow = (mediaItems, id, desiredStart, duration, totalTi
     return { start: s, duration };
 };
 
-// Crop/fit math shared by the browser (CroppedImage) and canvas (exportEngine)
-// renderers, so a crop set in the editor looks pixel-identical in both.
-//
-// 'contain': image fully visible, letterboxed — returns the drawn size.
-// 'cover': image fills the box; focalX/focalY (0..1) is the point of the
-//   ORIGINAL image kept centered in the box, zoom (>=1) narrows the visible
-//   source region further. Returns the source rectangle to sample.
-export const computeCropGeometry = (natW, natH, boxW, boxH, fit, focalX, focalY, zoom) => {
-    if (!natW || !natH || boxW <= 0 || boxH <= 0) return null;
+// The image column width (equal 54px margins each side) that every big image
+// is drawn at. Its height is derived from the crop's aspect ratio.
+export const MEDIA_IMAGE_WIDTH = 1080 - TEXT_COLUMN_PAD_LEFT * 2; // 972
 
-    if (fit === 'contain') {
-        const scale = Math.min(boxW / natW, boxH / natH);
-        return { mode: 'contain', scale, dw: natW * scale, dh: natH * scale };
-    }
+const DEFAULT_CROP = { x: 0, y: 0, w: 1, h: 1 };
+export const normalizeCrop = (crop) => {
+    const c = crop || DEFAULT_CROP;
+    return {
+        x: clamp(c.x ?? 0, 0, 1),
+        y: clamp(c.y ?? 0, 0, 1),
+        w: clamp(c.w ?? 1, 0.02, 1),
+        h: clamp(c.h ?? 1, 0.02, 1)
+    };
+};
 
-    const coverScale = Math.max(boxW / natW, boxH / natH);
-    const effScale = coverScale * Math.max(1, zoom || 1);
-    const visW = boxW / effScale;
-    const visH = boxH / effScale;
-    const sx = clamp((focalX ?? 0.5) * natW - visW / 2, 0, Math.max(0, natW - visW));
-    const sy = clamp((focalY ?? 0.5) * natH - visH / 2, 0, Math.max(0, natH - visH));
-    return { mode: 'cover', effScale, sx, sy, sw: visW, sh: visH };
+// Source rectangle (in natural pixels) of the image that the crop selects —
+// used identically by CroppedImage (browser) and exportEngine (canvas).
+export const cropSourceRect = (natW, natH, crop) => {
+    const c = normalizeCrop(crop);
+    return { sx: c.x * natW, sy: c.y * natH, sw: c.w * natW, sh: c.h * natH };
+};
+
+// The image's drawn height at MEDIA_IMAGE_WIDTH so the crop keeps its aspect
+// ratio (no stretching). Falls back to the previous height if size unknown.
+export const cropOutputHeight = (natW, natH, crop, fallback = 760) => {
+    if (!natW || !natH) return fallback;
+    const { sw, sh } = cropSourceRect(natW, natH, crop);
+    if (sw <= 0) return fallback;
+    return Math.round(MEDIA_IMAGE_WIDTH * (sh / sw));
 };
 
 export const newMediaItemDefaults = () => ({
-    height: 760, // box width is always the equal-margin text width (972)
-    fit: 'cover',
-    focalX: 0.5,
-    focalY: 0.5,
-    zoom: 1
+    height: 760,                       // derived from the crop once the image loads
+    crop: { ...DEFAULT_CROP },         // normalized [0..1] source rectangle
+    borderRadius: 24                   // rounded corners, adjustable in the editor
 });
 
 // The single source of truth for the on-screen layout at a given animation

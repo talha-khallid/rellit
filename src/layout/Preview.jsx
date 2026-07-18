@@ -1133,7 +1133,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                         marginTop: shown ? MEDIA_IMAGE_GAP : 0,
                                         opacity: shown ? 1 : 0,
                                         overflow: 'hidden',
-                                        borderRadius: MEDIA_IMAGE_RADIUS,
+                                        borderRadius: item.borderRadius ?? MEDIA_IMAGE_RADIUS,
                                         pointerEvents: 'none',
                                         transition: `height ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, margin-top ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, opacity ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`
                                     }}
@@ -1143,10 +1143,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                             src={item.src}
                                             boxW={imgW}
                                             boxH={item.height}
-                                            fit={item.fit}
-                                            focalX={item.focalX}
-                                            focalY={item.focalY}
-                                            zoom={item.zoom}
+                                            crop={item.crop}
                                         />
                                     </div>
                                 </div>

@@ -1,6 +1,6 @@
 import * as Mp4Muxer from 'mp4-muxer';
 import { hexToRgb } from './colorUtils';
-import { getMediaFrameGeometry, computeCropGeometry, MEDIA_IMAGE_RADIUS } from './mediaLayout';
+import { getMediaFrameGeometry, cropSourceRect, MEDIA_IMAGE_RADIUS } from './mediaLayout';
 
 // Trace a rounded-rectangle path (for clipping inline images with a corner
 // radius). Kept manual instead of ctx.roundRect for maximum canvas support.
@@ -252,22 +252,16 @@ export async function exportVideo({
                 const img = preloadedMediaImages[media.item.src];
                 if (img && img.width) {
                     const { left, width, fullHeight, clipTop, clipHeight, centerY, opacity } = media.image;
-                    const geo = computeCropGeometry(img.width, img.height, width, fullHeight, media.item.fit, media.item.focalX, media.item.focalY, media.item.zoom);
-                    if (geo) {
-                        ctx.save();
-                        ctx.globalAlpha = opacity;
-                        // Clip to the revealed window, then draw the full-height image
-                        // centered in it.
-                        roundRectPath(ctx, left, clipTop, width, clipHeight, Math.min(MEDIA_IMAGE_RADIUS, clipHeight / 2));
-                        ctx.clip();
-                        const imgTop = centerY - fullHeight / 2;
-                        if (geo.mode === 'contain') {
-                            ctx.drawImage(img, 0, 0, img.width, img.height, left + (width - geo.dw) / 2, imgTop + (fullHeight - geo.dh) / 2, geo.dw, geo.dh);
-                        } else {
-                            ctx.drawImage(img, geo.sx, geo.sy, geo.sw, geo.sh, left, imgTop, width, fullHeight);
-                        }
-                        ctx.restore();
-                    }
+                    const { sx, sy, sw, sh } = cropSourceRect(img.width, img.height, media.item.crop);
+                    const radius = media.item.borderRadius ?? MEDIA_IMAGE_RADIUS;
+                    ctx.save();
+                    ctx.globalAlpha = opacity;
+                    // Clip to the revealed window, then draw the full-height cropped
+                    // image centered in it.
+                    roundRectPath(ctx, left, clipTop, width, clipHeight, Math.min(radius, clipHeight / 2, width / 2));
+                    ctx.clip();
+                    ctx.drawImage(img, sx, sy, sw, sh, left, centerY - fullHeight / 2, width, fullHeight);
+                    ctx.restore();
                 }
             }
 

@@ -848,25 +848,43 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
     background: var(--bg-hover);
 }
 
-/* Big-image crop/fit popup */
+/* Big-image crop popup */
 .crop-modal {
-    width: 340px;
+    width: 380px;
+}
+.crop-stage-wrap {
+    display: flex;
+    justify-content: center;
+    margin: 4px 0 16px 0;
 }
 .crop-stage {
     position: relative;
-    margin: 0 auto 4px auto;
     background: var(--bg-input);
-    border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
     overflow: hidden;
     user-select: none;
+    -webkit-user-select: none;
 }
-.crop-stage.draggable {
-    cursor: grab;
+/* The crop rectangle: a clear window with a dimmed surround (huge box-shadow)
+   and a light border. */
+.crop-box {
+    position: absolute;
+    box-sizing: border-box;
+    border: 1.5px solid rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
 }
-.crop-stage.dragging {
-    cursor: grabbing;
+.crop-handle {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
+.crop-handle-nw { top: -7px; left: -7px; cursor: nwse-resize; }
+.crop-handle-ne { top: -7px; right: -7px; cursor: nesw-resize; }
+.crop-handle-sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
+.crop-handle-se { bottom: -7px; right: -7px; cursor: nwse-resize; }
 
 .export-progress-view {
     display: flex;

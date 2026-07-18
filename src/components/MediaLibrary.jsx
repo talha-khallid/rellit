@@ -2,7 +2,7 @@ import React, { useContext, useRef, useState } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { CroppedImage } from './CroppedImage';
 import { MediaCropModal } from './MediaCropModal';
-import { clampMediaWindow, newMediaItemDefaults } from '../utils/mediaLayout';
+import { clampMediaWindow, newMediaItemDefaults, cropOutputHeight } from '../utils/mediaLayout';
 
 export const MediaLibrary = () => {
     const {
@@ -20,15 +20,19 @@ export const MediaLibrary = () => {
     const addImage = (src) => {
         const totalTime = getTotalTime();
         const { start, duration } = clampMediaWindow(mediaItems, null, currentTimeRef.current || 0, 3, totalTime);
-        const newItem = {
-            id: `bigimg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-            src,
-            start,
-            duration,
-            ...newMediaItemDefaults()
-        };
+        const id = `bigimg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const newItem = { id, src, start, duration, ...newMediaItemDefaults() };
         setMediaItems([...mediaItems, newItem]);
-        setSelectedMediaId(newItem.id);
+        setSelectedMediaId(id);
+
+        // Derive the height from the image's natural aspect (full crop) as soon
+        // as it loads, so it isn't stretched at the placeholder height.
+        const probe = new Image();
+        probe.onload = () => {
+            const h = cropOutputHeight(probe.naturalWidth, probe.naturalHeight, newItem.crop);
+            setMediaItems(prev => prev.map(m => m.id === id ? { ...m, height: h } : m));
+        };
+        probe.src = src;
     };
 
     const handleFileUpload = (e) => {
@@ -116,7 +120,7 @@ export const MediaLibrary = () => {
                                     onClick={() => setSelectedMediaId(isSelected ? null : item.id)}
                                 >
                                     <div className="comp-thumb">
-                                        <CroppedImage src={item.src} boxW={30} boxH={30} fit="cover" focalX={item.focalX} focalY={item.focalY} zoom={1} />
+                                        <CroppedImage src={item.src} boxW={30} boxH={30} crop={item.crop} />
                                     </div>
                                     <span className="comp-card-title">{item.start.toFixed(1)}s – {(item.start + item.duration).toFixed(1)}s</span>
                                     <button className="icon-btn danger" title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
@@ -147,22 +151,9 @@ export const MediaLibrary = () => {
                                                 />
                                             </div>
                                         </div>
-                                        <div className="field-row cols-2">
-                                            <div className="field">
-                                                <label>Height (px)</label>
-                                                <input
-                                                    type="number" className="panel-input"
-                                                    value={item.height}
-                                                    onChange={e => updateItem(item.id, { height: Math.max(60, parseInt(e.target.value) || 60) })}
-                                                />
-                                            </div>
-                                            <div className="field">
-                                                <label>Fit</label>
-                                                <button className="btn-ghost" style={{ height: 32, width: '100%' }} onClick={() => setCropModalId(item.id)}>
-                                                    {item.fit === 'contain' ? 'Fit' : 'Fill'} · Edit crop
-                                                </button>
-                                            </div>
-                                        </div>
+                                        <button className="btn-ghost" style={{ height: 34, width: '100%' }} onClick={() => setCropModalId(item.id)}>
+                                            Crop & style image
+                                        </button>
                                     </div>
                                 )}
                             </div>
