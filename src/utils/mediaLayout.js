@@ -1,50 +1,40 @@
-// Shared geometry/timing for "big images" (full-width scene photos that sit
-// behind the captions). Both the live preview (CSS-driven) and the export
-// engine (canvas, driven frame-by-frame in JS) need to agree on:
-//   - how compact the caption block gets while a big image is showing
-//   - exactly which pixels of a cropped photo are visible
-//   - where one image's timeline slot ends and the next may begin
+// Shared geometry/timing for "big media" (full-width scene photos/videos that
+// sit with the captions). Both the live preview (CSS + a per-frame rAF loop) and
+// the export engine (canvas, frame-by-frame) use this file so they agree on:
+//   - how compact the caption block gets while media is showing
+//   - the on-screen box (width/height) of each media item
+//   - which part of the source is visible (the "frame" + pan/zoom keyframes)
+//   - how items reveal / hide and stack over time
 // so this file is the single source of truth for that math.
 
-// The caption scroll-window's height, expressed in `em` (relative to the
-// caption's own font-size) so it scales with font size like the rest of the
-// caption block. EXPANDED matches the original always-on height (~7 lines:
-// 3 above the highlight, the highlight, 3 below). COMPACT shows exactly 3
-// lines (1 above, the highlight, 1 below), per the "reduce to one line top
-// and bottom" requirement — 3 * the 1.45 line-height used in Preview/export.
 export const CAPTION_EXPANDED_EM = 10.15;
 export const CAPTION_LINE_HEIGHT_EM = 1.45;
 export const CAPTION_COMPACT_EM = 3 * CAPTION_LINE_HEIGHT_EM; // 4.35
 
-// How long the reveal/hide animation takes. Also doubles as the minimum gap
-// enforced between two big images on the timeline, so at most one image is
-// ever mid-transition at a time — this keeps the export engine's per-frame
-// math (which handles one active item at a time) always well-defined.
+// How long the reveal/hide animation takes.
 export const MEDIA_TRANSITION_MS = 500;
-export const MEDIA_MIN_GAP_SEC = MEDIA_TRANSITION_MS / 1000;
+// Media items may now sit flush against each other (0 gap); the timeline provides
+// magnetic snapping to make touching edges easy. Kept exported (== 0) so callers
+// that referenced it still work.
+export const MEDIA_MIN_GAP_SEC = 0;
 export const MEDIA_EASE_CSS = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
-// The big image is always exactly as wide as the caption text column, so it
-// reuses the same left/right padding used for captions in Preview.jsx.
+// The media column's max width (equal 54px margins each side).
 export const TEXT_COLUMN_PAD_LEFT = 54;
 export const TEXT_COLUMN_PAD_RIGHT = 157;
 
-// Corner radius applied to every big image, in both the live preview and export.
 export const MEDIA_IMAGE_RADIUS = 20;
-
-// Fixed margin (px, 1080x1920 logical space) between the image and the caption
-// block within the centered container.
 export const MEDIA_IMAGE_GAP = 28;
-
-// Screen height in the logical 1080x1920 space.
 export const SCREEN_H = 1920;
+export const MEDIA_IMAGE_WIDTH = 1080 - TEXT_COLUMN_PAD_LEFT * 2; // 972 (max width)
+// A media box never gets taller than this, so a tall/portrait frame doesn't
+// overfill the screen — it becomes narrower instead of taller.
+export const MEDIA_MAX_HEIGHT = Math.round(SCREEN_H * 0.8); // 1536
 
 export const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
-// Exact cubic-bezier(0.4, 0, 0.2, 1) evaluator — the SAME curve the preview's
-// CSS transitions use — so the export's per-frame progress matches the browser
-// animation precisely (not just approximately). Solves x=t via Newton's method,
-// then samples y.
+// Exact cubic-bezier(0.4, 0, 0.2, 1) evaluator — the SAME curve the preview's CSS
+// transitions use, so the export's per-frame progress matches precisely.
 const makeCubicBezier = (x1, y1, x2, y2) => {
     const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
     const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
@@ -81,29 +71,10 @@ export const isMediaActiveAt = (item, timeSec) =>
 export const getActiveMediaItem = (mediaItems, timeSec) =>
     mediaItems.find(m => isMediaActiveAt(m, timeSec)) || null;
 
-// For the export engine: which item (if any) is currently animating in,
-// fully shown, or animating out at timeSec, and how far into that motion it
-// is (0 = fully hidden/collapsed, 1 = fully shown/expanded). Items are kept
-// MEDIA_MIN_GAP_SEC apart (see clampMediaWindow), so at most one item is ever
-// "relevant" at a given instant.
-export const getMediaFrame = (mediaItems, timeSec) => {
-    for (const item of mediaItems) {
-        const end = item.start + item.duration;
-        const exitEnd = end + MEDIA_MIN_GAP_SEC;
-        if (timeSec < item.start || timeSec >= exitEnd) continue;
-        const rawProgress = timeSec <= end
-            ? Math.min((timeSec - item.start) * 1000 / MEDIA_TRANSITION_MS, 1)
-            : 1 - Math.min((timeSec - end) * 1000 / MEDIA_TRANSITION_MS, 1);
-        return { item, progress: mediaEase(rawProgress) };
-    }
-    return null;
-};
-
-// Resolves a candidate [start, start+duration] window against every other
-// media item so none ever overlap (and stay MEDIA_MIN_GAP_SEC apart). Nudges
-// toward whichever side is closer to the originally desired start. `id` is
-// the item being moved/resized (excluded from the collision set) or null
-// when placing a brand-new item.
+// Resolves a candidate [start, start+duration] window against every other media
+// item so none overlap (they may touch). Nudges toward whichever side is closer
+// to the desired start. `id` is the item being moved/resized (excluded) or null
+// for a brand-new item.
 export const clampMediaWindow = (mediaItems, id, desiredStart, duration, totalTime) => {
     duration = Math.max(0.2, duration);
     const others = mediaItems.filter(m => m.id !== id).sort((a, b) => a.start - b.start);
@@ -130,10 +101,11 @@ export const clampMediaWindow = (mediaItems, id, desiredStart, duration, totalTi
     return { start: s, duration };
 };
 
-// The image column width (equal 54px margins each side) that every big image
-// is drawn at. Its height is derived from the crop's aspect ratio.
-export const MEDIA_IMAGE_WIDTH = 1080 - TEXT_COLUMN_PAD_LEFT * 2; // 972
-
+// ---------------------------------------------------------------------------
+// Crop = FRAME. The popup crop only sets the frame's aspect ratio + default
+// position; it is NOT a hard clip. Keyframe pan/zoom can move the frame across
+// the WHOLE source (see composeCropView / views below).
+// ---------------------------------------------------------------------------
 const DEFAULT_CROP = { x: 0, y: 0, w: 1, h: 1 };
 export const normalizeCrop = (crop) => {
     const c = crop || DEFAULT_CROP;
@@ -145,71 +117,87 @@ export const normalizeCrop = (crop) => {
     };
 };
 
-// Source rectangle (in natural pixels) of the image that the crop selects —
-// used identically by CroppedImage (browser) and exportEngine (canvas).
+// Source rectangle (natural pixels) the crop selects — used for thumbnails.
 export const cropSourceRect = (natW, natH, crop) => {
     const c = normalizeCrop(crop);
     return { sx: c.x * natW, sy: c.y * natH, sw: c.w * natW, sh: c.h * natH };
 };
 
-// The image's drawn height at MEDIA_IMAGE_WIDTH so the crop keeps its aspect
-// ratio (no stretching). Falls back to the previous height if size unknown.
+// The drawn box (width,height) for a crop's aspect, capped at MEDIA_MAX_HEIGHT so
+// a tall frame becomes narrower rather than overfilling the screen.
+export const cropOutputBox = (natW, natH, crop) => {
+    if (!natW || !natH) return { width: MEDIA_IMAGE_WIDTH, height: 760 };
+    const { sw, sh } = cropSourceRect(natW, natH, crop);
+    if (sw <= 0 || sh <= 0) return { width: MEDIA_IMAGE_WIDTH, height: 760 };
+    const naturalH = MEDIA_IMAGE_WIDTH * (sh / sw);
+    if (naturalH <= MEDIA_MAX_HEIGHT) return { width: MEDIA_IMAGE_WIDTH, height: Math.round(naturalH) };
+    return { width: Math.round(MEDIA_IMAGE_WIDTH * (MEDIA_MAX_HEIGHT / naturalH)), height: MEDIA_MAX_HEIGHT };
+};
+// Back-compat helper (height only).
 export const cropOutputHeight = (natW, natH, crop, fallback = 760) => {
     if (!natW || !natH) return fallback;
-    const { sw, sh } = cropSourceRect(natW, natH, crop);
-    if (sw <= 0) return fallback;
-    return Math.round(MEDIA_IMAGE_WIDTH * (sh / sw));
+    return cropOutputBox(natW, natH, crop).height;
 };
 
 export const newMediaItemDefaults = (type = 'image') => ({
     type,                              // 'image' | 'video'
-    height: 760,                       // derived from the crop once the media loads
-    crop: { ...DEFAULT_CROP },         // normalized [0..1] source rectangle
-    borderRadius: 24,                  // rounded corners, adjustable in the editor
-    keyframes: []                      // pan/zoom motion inside the container (empty = static)
+    width: MEDIA_IMAGE_WIDTH,          // box width (derived once media loads)
+    height: 760,                       // box height (derived once media loads)
+    crop: { ...DEFAULT_CROP },         // frame: aspect + default position
+    borderRadius: 24,
+    keyframes: []                      // pan/zoom motion across the source (empty = static frame)
 });
 
-// --- Keyframe pan/zoom ("motion") inside the fixed image container ----------
-// A big image can carry an ordered list of keyframes describing a viewport that
-// pans/zooms INSIDE its container (a Ken Burns effect) WITHOUT changing the
-// container's on-screen size. A keyframe's view is { scale, cx, cy }:
-//   scale ≥ 1  — zoom factor (1 = the whole crop, 2 = zoomed 2x)
-//   cx, cy     — the focal center within the crop, in [0..1]
-// and `t` is its position in the image's window, a 0..1 fraction of the item's
-// duration (robust to timeline resizes). No keyframes → the static full crop,
-// so existing images are unchanged.
+// ---------------------------------------------------------------------------
+// Views (pan/zoom keyframes). A "view" is a viewport over the FULL source with
+// the crop frame's aspect:  { scale, cx, cy }
+//   scale — 1 = the crop-sized window; >1 zooms in; can go below 1 (down to the
+//           point the window fills the source) to reveal more than the crop.
+//   cx,cy — the window CENTER in source-normalized [0..1] (pans the whole image).
+// The default view (no keyframes) equals the crop rectangle exactly.
+// ---------------------------------------------------------------------------
 export const MEDIA_MAX_ZOOM = 4;
-export const DEFAULT_VIEW = { scale: 1, cx: 0.5, cy: 0.5 };
 
-export const clampView = (view) => {
-    const scale = clamp(view?.scale ?? 1, 1, MEDIA_MAX_ZOOM);
-    const half = 0.5 / scale;                 // half the viewport, in crop-space
+export const defaultView = (crop) => {
+    const c = normalizeCrop(crop);
+    return { scale: 1, cx: c.x + c.w / 2, cy: c.y + c.h / 2 };
+};
+
+export const minViewScale = (crop) => {
+    const c = normalizeCrop(crop);
+    return Math.max(c.w, c.h); // window (c.w/scale × c.h/scale) must fit in [0,1]
+};
+
+export const clampView = (view, crop) => {
+    const c = normalizeCrop(crop);
+    const scale = clamp(view?.scale ?? 1, minViewScale(crop), MEDIA_MAX_ZOOM);
+    const halfW = c.w / (2 * scale);
+    const halfH = c.h / (2 * scale);
+    const def = defaultView(crop);
     return {
         scale,
-        cx: clamp(view?.cx ?? 0.5, half, 1 - half),
-        cy: clamp(view?.cy ?? 0.5, half, 1 - half)
+        cx: clamp(view?.cx ?? def.cx, halfW, 1 - halfW),
+        cy: clamp(view?.cy ?? def.cy, halfH, 1 - halfH)
     };
 };
 
 const lerp = (a, b, t) => a + (b - a) * t;
-// Smooth ease-in-out between keyframes so pans/zooms glide instead of snapping.
 const smoothstep = (t) => t * t * (3 - 2 * t);
 
 // Interpolate the view at progress p (0..1 across the item's window) from the
-// keyframe list. 0 keyframes → default (no motion); 1 → that view, constant.
-// Before the first / after the last keyframe the view holds steady.
-export const sampleKeyframes = (keyframes, p) => {
-    if (!keyframes || keyframes.length === 0) return { ...DEFAULT_VIEW };
+// keyframe list. 0 keyframes → the default frame; before first / after last holds.
+export const sampleKeyframes = (keyframes, p, crop) => {
+    if (!keyframes || keyframes.length === 0) return defaultView(crop);
     const kfs = [...keyframes].sort((a, b) => a.t - b.t);
-    if (p <= kfs[0].t) return clampView(kfs[0]);
+    if (p <= kfs[0].t) return clampView(kfs[0], crop);
     const last = kfs[kfs.length - 1];
-    if (p >= last.t) return clampView(last);
+    if (p >= last.t) return clampView(last, crop);
     for (let i = 0; i < kfs.length - 1; i++) {
         const a = kfs[i], b = kfs[i + 1];
         if (p >= a.t && p <= b.t) {
             const span = b.t - a.t;
             const local = span > 0 ? smoothstep((p - a.t) / span) : 0;
-            const va = clampView(a), vb = clampView(b);
+            const va = clampView(a, crop), vb = clampView(b, crop);
             return {
                 scale: lerp(va.scale, vb.scale, local),
                 cx: lerp(va.cx, vb.cx, local),
@@ -217,48 +205,53 @@ export const sampleKeyframes = (keyframes, p) => {
             };
         }
     }
-    return clampView(last);
+    return clampView(last, crop);
 };
 
-// Compose a keyframe view on top of the base crop → the effective source
-// rectangle in natural pixels. With DEFAULT_VIEW this equals cropSourceRect, so
-// it is a safe drop-in for the export's drawImage source args.
+// The effective source rectangle (natural pixels) for a view over the full
+// source. With the default view this equals cropSourceRect.
 export const composeCropView = (natW, natH, crop, view) => {
-    const base = cropSourceRect(natW, natH, crop);
-    const v = clampView(view);
+    const c = normalizeCrop(crop);
+    const v = clampView(view, crop);
+    const windowW = c.w / v.scale;
+    const windowH = c.h / v.scale;
     return {
-        sx: base.sx + (v.cx - 0.5 / v.scale) * base.sw,
-        sy: base.sy + (v.cy - 0.5 / v.scale) * base.sh,
-        sw: base.sw / v.scale,
-        sh: base.sh / v.scale
+        sx: (v.cx - windowW / 2) * natW,
+        sy: (v.cy - windowH / 2) * natH,
+        sw: windowW * natW,
+        sh: windowH * natH
     };
 };
 
-// The CSS transform (transform-origin: 0 0) that applies a view to a box-sized,
-// already-cropped image element in the live preview — the exact CSS counterpart
-// of composeCropView, so the editor preview and the export match.
-export const mediaViewTransform = (view, boxW, boxH) => {
-    const v = clampView(view);
-    const tx = boxW / 2 - v.scale * v.cx * boxW;
-    const ty = boxH / 2 - v.scale * v.cy * boxH;
-    return `translate(${tx}px, ${ty}px) scale(${v.scale})`;
+// Position/size (px) for a raw full-source <img>/<video> inside a boxW×boxH,
+// overflow-hidden window so the given view is shown. The editor preview sets
+// these imperatively each frame; matches composeCropView exactly.
+export const mediaElementBox = (crop, view, boxW, boxH) => {
+    const c = normalizeCrop(crop);
+    const v = clampView(view, crop);
+    const windowW = c.w / v.scale;
+    const windowH = c.h / v.scale;
+    const elW = boxW / windowW;
+    const elH = boxH / windowH;
+    return {
+        width: elW,
+        height: elH,
+        left: -(v.cx - windowW / 2) * elW,
+        top: -(v.cy - windowH / 2) * elH
+    };
 };
 
-// Progress (0..1) through an item's own window at an absolute time.
 export const mediaLocalProgress = (item, timeSec) => {
     if (!item || item.duration <= 0) return 0;
     return clamp((timeSec - item.start) / item.duration, 0, 1);
 };
 
-export const newKeyframe = (t = 0, view = DEFAULT_VIEW) => ({
+export const newKeyframe = (t = 0, view, crop) => ({
     id: `kf_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     t: clamp(t, 0, 1),
-    ...clampView(view)
+    ...clampView(view, crop)
 });
 
-// The keyframe at (or within tEps of) normalized time t, else null. Lets the
-// timeline / direct-manipulation editing decide whether to update the keyframe
-// under the playhead or create a fresh one.
 export const keyframeAt = (keyframes, t, tEps = 0.01) => {
     if (!keyframes || !keyframes.length) return null;
     let best = null, bestD = tEps;
@@ -269,56 +262,93 @@ export const keyframeAt = (keyframes, t, tEps = 0.01) => {
     return best;
 };
 
-// Re-clamp a keyframe after an edit (keeps id + time, clamps the view).
-export const normalizeKeyframe = (k) => ({ id: k.id, t: clamp(k.t ?? 0, 0, 1), ...clampView(k) });
+export const normalizeKeyframe = (k, crop) => ({ id: k.id, t: clamp(k.t ?? 0, 0, 1), ...clampView(k, crop) });
 
-// The single source of truth for the on-screen layout at a given animation
-// `progress` (0 = no image / captions at rest, 1 = image fully shown / captions
-// compact). It models exactly what a centered CSS flex column does:
-//
-//     [ caption block (height animates expanded→compact) ]
-//     [ gap (0→G) ]
-//     [ image block (height animates 0→A, reveals middle-out) ]
-//
-// the whole group vertically centered at the caption's anchor (videoAlignPercent).
-// Because the image reserves real, growing space below the text — never absolute
-// space over it — the two can never overlap while animating. The live preview
-// literally IS this flex layout; the export engine reproduces these numbers.
+// ---------------------------------------------------------------------------
+// Timeline reveal model. Each item fades in over its first TRANSITION and out
+// over the TRANSITION after its end (matching the preview's CSS transitions).
+// Adjacent items therefore cross-fade; the caption stays compact across a whole
+// run of touching media (its target follows the UNION of windows).
+// ---------------------------------------------------------------------------
+const T_SEC = MEDIA_TRANSITION_MS / 1000;
+
+const itemReveal = (item, timeSec) => {
+    const s = item.start, e = item.start + item.duration;
+    if (timeSec < s || timeSec >= e + T_SEC) return 0;
+    let r = Math.min((timeSec - s) / T_SEC, 1);       // fade in
+    if (timeSec > e) r = Math.min(r, 1 - (timeSec - e) / T_SEC); // fade out
+    return mediaEase(clamp(r, 0, 1));
+};
+
+const captionCompactAt = (mediaItems, timeSec) => {
+    const iv = mediaItems.map(m => [m.start, m.start + m.duration]).sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const [s, e] of iv) {
+        const last = merged[merged.length - 1];
+        if (last && s <= last[1] + 1e-6) last[1] = Math.max(last[1], e);
+        else merged.push([s, e]);
+    }
+    let best = 0;
+    for (const [s, e] of merged) {
+        if (timeSec < s || timeSec >= e + T_SEC) continue;
+        let r = Math.min((timeSec - s) / T_SEC, 1);
+        if (timeSec > e) r = Math.min(r, 1 - (timeSec - e) / T_SEC);
+        best = Math.max(best, clamp(r, 0, 1));
+    }
+    return mediaEase(best);
+};
+
+// Kept for the live preview, which only needs the caption height at a 0/1 target
+// (CSS smooths it). Single-item; layout of the media blocks is done in CSS.
 export const getMediaGeometry = (item, progress, fontSize, videoAlignPercent = 50) => {
     const expandedH = CAPTION_EXPANDED_EM * fontSize;
     const compactH = CAPTION_COMPACT_EM * fontSize;
     const restCenter = (videoAlignPercent / 100) * SCREEN_H;
     const captionHeight = expandedH + (compactH - expandedH) * progress;
-
-    if (!item) {
-        return { captionHeight, captionCenterY: restCenter, captionShift: 0, image: null };
-    }
-
-    const A = item.height;
-    const gapReserved = MEDIA_IMAGE_GAP * progress;
-    const imgReserved = A * progress;               // grows in below the text
-    const groupH = captionHeight + gapReserved + imgReserved;
-    const groupTop = restCenter - groupH / 2;        // group stays centered
-    const captionCenterY = groupTop + captionHeight / 2;
-    const captionShift = captionCenterY - restCenter; // caption drifts up as image grows
-    const imgBlockTop = groupTop + captionHeight + gapReserved;
-
-    const image = {
-        left: TEXT_COLUMN_PAD_LEFT,
-        width: 1080 - TEXT_COLUMN_PAD_LEFT * 2,
-        fullHeight: A,                       // the image's full drawn height
-        clipTop: imgBlockTop,                // visible (revealed) window …
-        clipHeight: imgReserved,             // … which grows 0→A
-        centerY: imgBlockTop + imgReserved / 2,
-        opacity: progress
-    };
-    return { captionHeight, captionCenterY, captionShift, image };
+    return { captionHeight, captionCenterY: restCenter, captionShift: 0, image: null };
 };
 
-// Per-frame geometry for the export engine (finds the active/animating item).
-export const getMediaFrameGeometry = (mediaItems, timeSec, fontSize, videoAlignPercent = 50) => {
-    const frame = getMediaFrame(mediaItems, timeSec);
-    const item = frame ? frame.item : null;
-    const progress = frame ? frame.progress : 0;
-    return { ...getMediaGeometry(item, progress, fontSize, videoAlignPercent), item, progress };
+// Full per-frame layout for the export engine: caption band + a stack of the
+// media blocks currently revealed (0, 1, or 2 during a cross-fade), matching the
+// preview's centered flex column.
+export const getMediaLayout = (mediaItems, timeSec, fontSize, videoAlignPercent = 50) => {
+    const expandedH = CAPTION_EXPANDED_EM * fontSize;
+    const compactH = CAPTION_COMPACT_EM * fontSize;
+    const restCenter = (videoAlignPercent / 100) * SCREEN_H;
+    const compact = captionCompactAt(mediaItems, timeSec);
+    const captionHeight = expandedH + (compactH - expandedH) * compact;
+
+    const shown = mediaItems
+        .map(m => ({ item: m, reveal: itemReveal(m, timeSec) }))
+        .filter(s => s.reveal > 0.0005)
+        .sort((a, b) => a.item.start - b.item.start);
+
+    let stackH = 0;
+    for (const s of shown) stackH += s.reveal * (MEDIA_IMAGE_GAP + s.item.height);
+
+    const groupH = captionHeight + stackH;
+    const groupTop = restCenter - groupH / 2;
+    const captionCenterY = groupTop + captionHeight / 2;
+    const captionShift = captionCenterY - restCenter;
+
+    let cursor = groupTop + captionHeight;
+    const images = shown.map(s => {
+        const w = s.item.width || MEDIA_IMAGE_WIDTH;
+        const gap = MEDIA_IMAGE_GAP * s.reveal;
+        const clipHeight = s.item.height * s.reveal;
+        const clipTop = cursor + gap;
+        cursor = clipTop + clipHeight;
+        return {
+            item: s.item,
+            left: (1080 - w) / 2,
+            width: w,
+            fullHeight: s.item.height,
+            clipTop,
+            clipHeight,
+            centerY: clipTop + clipHeight / 2,
+            opacity: s.reveal
+        };
+    });
+
+    return { captionHeight, captionCenterY, captionShift, images };
 };

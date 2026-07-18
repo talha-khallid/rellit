@@ -1,6 +1,6 @@
 import * as Mp4Muxer from 'mp4-muxer';
 import { hexToRgb } from './colorUtils';
-import { getMediaFrameGeometry, composeCropView, sampleKeyframes, mediaLocalProgress, clamp, MEDIA_IMAGE_RADIUS } from './mediaLayout';
+import { getMediaLayout, composeCropView, sampleKeyframes, mediaLocalProgress, clamp, MEDIA_IMAGE_RADIUS } from './mediaLayout';
 
 // Seek a <video> to a time and resolve once the frame is ready to draw. Has a
 // safety timeout so a missed 'seeked' event can't stall the whole export.
@@ -277,10 +277,10 @@ export async function exportVideo({
             const activeLineSpans = visualLines[activeIdx];
             const settings = lineSettings[activeIdx];
 
-            // Caption + big-image geometry for this frame — the SAME function the
-            // live preview uses (getMediaFrameGeometry), so the animated shrink,
-            // caption re-centering, and image reveal match the editor exactly.
-            const media = getMediaFrameGeometry(mediaItems, currentTimeMs / 1000, fontSize, videoAlignPercent);
+            // Caption + big-media layout for this frame — the SAME function the
+            // live preview matches, so the animated shrink, caption re-centering,
+            // and media reveal/cross-fade line up with the editor exactly.
+            const media = getMediaLayout(mediaItems, currentTimeMs / 1000, fontSize, videoAlignPercent);
             const bandTop = media.captionCenterY - media.captionHeight / 2;
             const bandH = media.captionHeight;
 
@@ -304,40 +304,38 @@ export async function exportVideo({
             ctx.fillStyle = videoBgColor || '#050505';
             ctx.fillRect(0, 0, 1080, 1920);
 
-            // Draw the big scene image below the caption. Mirrors Preview.jsx: the
-            // image is full-height and vertically centered inside a growing window
-            // (clipTop..clipTop+clipHeight), so it reveals middle-out as it fades in.
-            if (media.item && media.image && media.image.clipHeight > 0) {
-                const isVideo = media.item.type === 'video';
-                const el = isVideo ? preloadedMediaVideos[media.item.src] : preloadedMediaImages[media.item.src];
+            // Draw each revealed media block below the caption (up to two while
+            // adjacent items cross-fade). Mirrors Preview.jsx: full-height media
+            // centered in a growing window (clipTop..clipTop+clipHeight), showing
+            // the current pan/zoom view of the source.
+            for (const im of media.images) {
+                if (im.clipHeight <= 0) continue;
+                const it = im.item;
+                const isVideo = it.type === 'video';
+                const el = isVideo ? preloadedMediaVideos[it.src] : preloadedMediaImages[it.src];
                 const natW = isVideo ? (el && el.videoWidth) : (el && el.width);
                 const natH = isVideo ? (el && el.videoHeight) : (el && el.height);
-                if (el && natW) {
-                    // For video, seek to the frame at this instant (freeze on the last
-                    // frame if the block outlasts the clip) before drawing.
-                    if (isVideo) {
-                        const vidDur = media.item.videoDuration || el.duration || 0;
-                        const trimStart = media.item.trimStart || 0;
-                        const rel = Math.min(Math.max((currentTimeMs / 1000) - media.item.start, 0), media.item.duration);
-                        let vt = trimStart + rel;
-                        if (vidDur > 0) vt = clamp(vt, 0, vidDur - 0.03);
-                        await seekVideoTo(el, vt);
-                    }
-                    const { left, width, fullHeight, clipTop, clipHeight, centerY, opacity } = media.image;
-                    // Apply the item's pan/zoom keyframes at this instant on top of
-                    // its base crop (Ken Burns inside the fixed container).
-                    const view = sampleKeyframes(media.item.keyframes, mediaLocalProgress(media.item, currentTimeMs / 1000));
-                    const { sx, sy, sw, sh } = composeCropView(natW, natH, media.item.crop, view);
-                    const radius = media.item.borderRadius ?? MEDIA_IMAGE_RADIUS;
-                    ctx.save();
-                    ctx.globalAlpha = opacity;
-                    // Clip to the revealed window, then draw the full-height cropped
-                    // media centered in it.
-                    roundRectPath(ctx, left, clipTop, width, clipHeight, Math.min(radius, clipHeight / 2, width / 2));
-                    ctx.clip();
-                    ctx.drawImage(el, sx, sy, sw, sh, left, centerY - fullHeight / 2, width, fullHeight);
-                    ctx.restore();
+                if (!el || !natW) continue;
+                // For video, seek to the frame at this instant (freeze on the last
+                // frame if the block outlasts the clip) before drawing.
+                if (isVideo) {
+                    const vidDur = it.videoDuration || el.duration || 0;
+                    const trimStart = it.trimStart || 0;
+                    const rel = Math.min(Math.max((currentTimeMs / 1000) - it.start, 0), it.duration);
+                    let vt = trimStart + rel;
+                    if (vidDur > 0) vt = clamp(vt, 0, vidDur - 0.03);
+                    await seekVideoTo(el, vt);
                 }
+                const { left, width, fullHeight, clipTop, clipHeight, centerY, opacity } = im;
+                const view = sampleKeyframes(it.keyframes, mediaLocalProgress(it, currentTimeMs / 1000), it.crop);
+                const { sx, sy, sw, sh } = composeCropView(natW, natH, it.crop, view);
+                const radius = it.borderRadius ?? MEDIA_IMAGE_RADIUS;
+                ctx.save();
+                ctx.globalAlpha = opacity;
+                roundRectPath(ctx, left, clipTop, width, clipHeight, Math.min(radius, clipHeight / 2, width / 2));
+                ctx.clip();
+                ctx.drawImage(el, sx, sy, sw, sh, left, centerY - fullHeight / 2, width, fullHeight);
+                ctx.restore();
             }
 
             // Clip all caption text + inline images to the (animating) caption band
@@ -615,20 +613,27 @@ export async function exportVideo({
             ctx.fillStyle = grad;
             ctx.fillRect(0, bandTop, 1080, bandH);
 
-            // Fill solid background outside the caption band. When a big image is on
-            // screen it sits BELOW the band, so erase above the band, the gap between
-            // band and image, and below the image — never over the image itself.
+            // Fill solid background everywhere EXCEPT the caption band and the media
+            // block regions (which sit below the band). Build the vertical keep-bands
+            // (band + each revealed media block), merge them, and fill the gaps.
             ctx.fillStyle = videoBgColor || '#050505';
-            if (media.item && media.image && media.image.clipHeight > 0) {
-                const imgTop = media.image.clipTop;
-                const imgBottom = media.image.clipTop + media.image.clipHeight;
-                ctx.fillRect(0, 0, 1080, bandTop);
-                if (imgTop > bandTop + bandH) ctx.fillRect(0, bandTop + bandH, 1080, imgTop - (bandTop + bandH));
-                ctx.fillRect(0, imgBottom, 1080, 1920 - imgBottom);
-            } else {
-                ctx.fillRect(0, 0, 1080, bandTop);
-                ctx.fillRect(0, bandTop + bandH, 1080, 1920 - (bandTop + bandH));
+            const keep = [[bandTop, bandTop + bandH]];
+            for (const im of media.images) {
+                if (im.clipHeight > 0) keep.push([im.clipTop, im.clipTop + im.clipHeight]);
             }
+            keep.sort((a, b) => a[0] - b[0]);
+            const merged = [];
+            for (const [s, e] of keep) {
+                const last = merged[merged.length - 1];
+                if (last && s <= last[1] + 0.5) last[1] = Math.max(last[1], e);
+                else merged.push([s, e]);
+            }
+            let y = 0;
+            for (const [s, e] of merged) {
+                if (s > y) ctx.fillRect(0, y, 1080, s - y);
+                y = Math.max(y, e);
+            }
+            if (y < 1920) ctx.fillRect(0, y, 1080, 1920 - y);
 
             const videoFrame = new VideoFrame(offscreenCanvas, { timestamp: currentTimeMs * 1000 });
             videoEncoder.encode(videoFrame, { keyFrame: frame % 30 === 0 });

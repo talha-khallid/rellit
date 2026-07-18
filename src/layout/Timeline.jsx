@@ -196,6 +196,22 @@ export const Timeline = () => {
     };
 
     useEffect(() => {
+        // Magnetic snap: pull a time value to a nearby media edge / 0 / end / playhead.
+        const snapTime = (time, excludeId) => {
+            const thresh = 8 / timelineScale; // ~8px
+            const points = [0, totalTime, currentTimeRef.current];
+            for (const m of mediaItems) {
+                if (m.id === excludeId) continue;
+                points.push(m.start, m.start + m.duration);
+            }
+            let best = time, bestD = thresh;
+            for (const p of points) {
+                const d = Math.abs(time - p);
+                if (d < bestD) { best = p; bestD = d; }
+            }
+            return best;
+        };
+
         const handleMouseMove = (e) => {
             if (isResizing) {
                 let deltaX = e.clientX - startX;
@@ -237,7 +253,12 @@ export const Timeline = () => {
                 const deltaTime = (e.clientX - moveStartX) / timelineScale;
                 const current = mediaItems.find(m => m.id === moveMediaId);
                 if (current) {
-                    const desiredStart = Math.max(0, moveOrigStart + deltaTime);
+                    let desiredStart = Math.max(0, moveOrigStart + deltaTime);
+                    // Snap the closer of the two edges to a nearby edge/marker.
+                    const snapStart = snapTime(desiredStart, moveMediaId);
+                    const snapEnd = snapTime(desiredStart + current.duration, moveMediaId) - current.duration;
+                    desiredStart = Math.abs(snapStart - desiredStart) <= Math.abs(snapEnd - desiredStart) ? snapStart : snapEnd;
+                    desiredStart = Math.max(0, desiredStart);
                     const { start, duration } = clampMediaWindow(mediaItems, moveMediaId, desiredStart, current.duration, totalTime);
                     setMediaItems(mediaItems.map(m => m.id === moveMediaId ? { ...m, start, duration } : m));
                 }
@@ -254,7 +275,9 @@ export const Timeline = () => {
                         // Trim from END: start & in-point fixed, only the length changes.
                         let rightLimit = totalTime != null ? totalTime : Infinity;
                         for (const o of others) if (o.start >= init.start) rightLimit = Math.min(rightLimit, o.start - MEDIA_MIN_GAP_SEC);
-                        let newDur = init.duration + dt;
+                        // Snap the right edge to a nearby edge/marker.
+                        const snappedEnd = snapTime(init.start + init.duration + dt, resizeMediaId);
+                        let newDur = snappedEnd - init.start;
                         // A video can't play past the end of its source.
                         if (isVideo && vidDur > 0) newDur = Math.min(newDur, vidDur - (init.trimStart || 0));
                         newDur = Math.max(0.2, Math.min(newDur, rightLimit - init.start));
@@ -268,7 +291,9 @@ export const Timeline = () => {
                         let minStart = leftLimit;
                         // A video can't reveal earlier than its source start (trimStart >= 0).
                         if (isVideo) minStart = Math.max(minStart, init.start - (init.trimStart || 0));
-                        const newStart = Math.max(minStart, Math.min(init.start + dt, rightEdge - 0.2));
+                        // Snap the left edge to a nearby edge/marker.
+                        const snappedStart = snapTime(init.start + dt, resizeMediaId);
+                        const newStart = Math.max(minStart, Math.min(snappedStart, rightEdge - 0.2));
                         const patch = { start: newStart, duration: rightEdge - newStart };
                         if (isVideo) patch.trimStart = Math.max(0, (init.trimStart || 0) + (newStart - init.start));
                         setMediaItems(mediaItems.map(m => m.id === resizeMediaId ? { ...m, ...patch } : m));
@@ -360,7 +385,7 @@ export const Timeline = () => {
                     if (existing) {
                         setSelectedKeyframeId(existing.id);
                     } else {
-                        const kf = newKeyframe(tNorm, sampleKeyframes(item.keyframes, tNorm));
+                        const kf = newKeyframe(tNorm, sampleKeyframes(item.keyframes, tNorm, item.crop), item.crop);
                         setMediaItems(mediaItems.map(m => m.id === selectedMediaId
                             ? { ...m, keyframes: [...(m.keyframes || []), kf] } : m));
                         setSelectedKeyframeId(kf.id);

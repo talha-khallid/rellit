@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { clamp, normalizeCrop, cropOutputHeight } from '../utils/mediaLayout';
+import { clamp, normalizeCrop, cropOutputBox } from '../utils/mediaLayout';
 
 const STAGE_MAX_W = 320;
 const STAGE_MAX_H = 340;
@@ -38,7 +38,7 @@ export const MediaCropModal = ({ item, editingDuration = 0, initialTab = 'crop',
     const commitCrop = () => {
         const nc = draftCropRef.current;
         const patch = { crop: nc };
-        if (natural) patch.height = cropOutputHeight(natural.w, natural.h, nc);
+        if (natural) { const box = cropOutputBox(natural.w, natural.h, nc); patch.width = box.width; patch.height = box.height; }
         onChange(patch);
     };
 
@@ -257,7 +257,7 @@ export const MediaCropModal = ({ item, editingDuration = 0, initialTab = 'crop',
                         </div>
 
                         <div className="export-modal-footer">
-                            <button className="btn-ghost" onClick={() => { setCropDraft({ x: 0, y: 0, w: 1, h: 1 }); onChange({ crop: { x: 0, y: 0, w: 1, h: 1 }, ...(natural ? { height: cropOutputHeight(natural.w, natural.h, { x: 0, y: 0, w: 1, h: 1 }) } : {}) }); }}>Reset crop</button>
+                            <button className="btn-ghost" onClick={() => { const full = { x: 0, y: 0, w: 1, h: 1 }; setCropDraft(full); const box = natural ? cropOutputBox(natural.w, natural.h, full) : null; onChange({ crop: full, ...(box ? { width: box.width, height: box.height } : {}) }); }}>Reset crop</button>
                             <button className="btn-export-start" onClick={onClose}>Done</button>
                         </div>
                     </>

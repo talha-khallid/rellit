@@ -1,9 +1,7 @@
 import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { getBehaviors, newComponentDefaults } from '../utils/componentStyle';
-import { CroppedImage } from '../components/CroppedImage';
-import { CroppedVideo } from '../components/CroppedMedia';
-import { MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, TEXT_COLUMN_PAD_LEFT, MEDIA_IMAGE_WIDTH, MEDIA_MAX_ZOOM, getMediaGeometry, getActiveMediaItem, sampleKeyframes, mediaViewTransform, mediaLocalProgress, keyframeAt, normalizeKeyframe, newKeyframe, clamp, DEFAULT_VIEW } from '../utils/mediaLayout';
+import { MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, MEDIA_IMAGE_WIDTH, MEDIA_MAX_ZOOM, getMediaGeometry, getActiveMediaItem, sampleKeyframes, mediaElementBox, mediaLocalProgress, keyframeAt, normalizeKeyframe, newKeyframe, clamp, defaultView, normalizeCrop, minViewScale } from '../utils/mediaLayout';
 
 export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const { 
@@ -43,12 +41,12 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const lineTimerRef = useRef(null);
     const [renderedWords, setRenderedWords] = useState([]);
 
-    // One transform target per big image, driven imperatively every frame so the
-    // keyframe pan/zoom animates smoothly (and tracks scrubbing) without React
-    // re-rendering the image element on every tick.
-    const mediaViewRefs = useRef({});
-    // The underlying <video> element per video item, so playback can be synced to
-    // the timeline clock (play/pause/seek).
+    // The raw full-source <img>/<video> element per media item. Its size/position
+    // inside the fixed box is driven imperatively every frame (mediaElementBox) so
+    // the pan/zoom view animates smoothly — and can reach the WHOLE source — without
+    // re-rendering React on every tick.
+    const mediaElRefs = useRef({});
+    // Video elements (same node as above for video items), for playback sync.
     const mediaVideoRefs = useRef({});
 
     // Always hand the re-measurement the LATEST line durations. lineSettings is
@@ -518,21 +516,27 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         }
     };
 
-    // Drive each big image's keyframe pan/zoom from the shared playback clock,
-    // every frame, so it animates during playback and follows the playhead while
-    // scrubbing. Images without keyframes stay at the identity transform. Video
-    // items are also kept in playback sync here.
+    // Drive each media item's pan/zoom view from the shared playback clock, every
+    // frame, by positioning its raw full-source element inside the fixed box. This
+    // lets the view pan across the WHOLE source and follows the playhead while
+    // scrubbing, without re-rendering React. Videos are also kept in playback sync.
     useEffect(() => {
         let raf;
         const loop = () => {
             const t = currentTimeRef.current;
             for (const item of mediaItems) {
-                const el = mediaViewRefs.current[item.id];
+                const el = mediaElRefs.current[item.id];
                 if (el) {
+                    const boxW = item.width || MEDIA_IMAGE_WIDTH;
+                    const boxH = item.height;
                     const view = (item.keyframes && item.keyframes.length)
-                        ? sampleKeyframes(item.keyframes, mediaLocalProgress(item, t))
-                        : DEFAULT_VIEW;
-                    el.style.transform = mediaViewTransform(view, MEDIA_IMAGE_WIDTH, item.height);
+                        ? sampleKeyframes(item.keyframes, mediaLocalProgress(item, t), item.crop)
+                        : defaultView(item.crop);
+                    const b = mediaElementBox(item.crop, view, boxW, boxH);
+                    el.style.width = b.width + 'px';
+                    el.style.height = b.height + 'px';
+                    el.style.left = b.left + 'px';
+                    el.style.top = b.top + 'px';
                 }
                 if (item.type === 'video') {
                     const v = mediaVideoRefs.current[item.id];
@@ -558,7 +562,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
 
     const updateMediaKf = (itemId, kfId, patch) => {
         setMediaItems(prev => prev.map(m => m.id === itemId
-            ? { ...m, keyframes: (m.keyframes || []).map(k => k.id === kfId ? normalizeKeyframe({ ...k, ...patch }) : k) }
+            ? { ...m, keyframes: (m.keyframes || []).map(k => k.id === kfId ? normalizeKeyframe({ ...k, ...patch }, m.crop) : k) }
             : m));
     };
 
@@ -568,8 +572,8 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         const t = mediaLocalProgress(item, currentTimeRef.current);
         const existing = keyframeAt(item.keyframes || [], t, kfTolerance(item));
         if (existing) return { id: existing.id, view: existing };
-        const view = sampleKeyframes(item.keyframes, t);
-        const kf = newKeyframe(t, view);
+        const view = sampleKeyframes(item.keyframes, t, item.crop);
+        const kf = newKeyframe(t, view, item.crop);
         setMediaItems(prev => prev.map(m => m.id === item.id
             ? { ...m, keyframes: [...(m.keyframes || []), kf] } : m));
         setSelectedKeyframeId(kf.id);
@@ -581,9 +585,10 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         e.preventDefault();
         e.stopPropagation();
         const t = mediaLocalProgress(item, currentTimeRef.current);
-        const base = sampleKeyframes(item.keyframes, t); // current on-screen view
+        const base = sampleKeyframes(item.keyframes, t, item.crop); // current on-screen view
+        const c = normalizeCrop(item.crop);
         mediaEditRef.current = {
-            itemId: item.id, height: item.height,
+            itemId: item.id, boxW: item.width || MEDIA_IMAGE_WIDTH, boxH: item.height, cropW: c.w, cropH: c.h,
             startX: e.clientX, startY: e.clientY,
             baseCx: base.cx, baseCy: base.cy, scale: base.scale,
             kfId: null, moved: false
@@ -609,9 +614,10 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
             }
             const dxLogical = (e.clientX - d.startX) / (screenScale || 1);
             const dyLogical = (e.clientY - d.startY) / (screenScale || 1);
-            // Content follows the cursor: dragging right reveals the left of the image.
-            const newCx = d.baseCx - dxLogical / (MEDIA_IMAGE_WIDTH * d.scale);
-            const newCy = d.baseCy - dyLogical / (d.height * d.scale);
+            // Content follows the cursor; cx/cy are source-normalized, and one box
+            // pixel = (window size / box size) of the source (window = crop / scale).
+            const newCx = d.baseCx - dxLogical * (d.cropW / d.scale) / d.boxW;
+            const newCy = d.baseCy - dyLogical * (d.cropH / d.scale) / d.boxH;
             updateMediaKf(d.itemId, d.kfId, { cx: newCx, cy: newCy });
         };
         const up = () => { setMediaPanning(false); mediaEditRef.current = null; };
@@ -630,13 +636,13 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         e.stopPropagation();
         const t = mediaLocalProgress(item, currentTimeRef.current);
         const existing = keyframeAt(item.keyframes || [], t, kfTolerance(item));
-        const cur = existing || sampleKeyframes(item.keyframes, t);
-        const nextScale = clamp(cur.scale * (e.deltaY < 0 ? 1.08 : 1 / 1.08), 1, MEDIA_MAX_ZOOM);
+        const cur = existing || sampleKeyframes(item.keyframes, t, item.crop);
+        const nextScale = clamp(cur.scale * (e.deltaY < 0 ? 1.08 : 1 / 1.08), minViewScale(item.crop), MEDIA_MAX_ZOOM);
         if (existing) {
             updateMediaKf(item.id, existing.id, { scale: nextScale });
             setSelectedKeyframeId(existing.id);
         } else {
-            const kf = newKeyframe(t, { scale: nextScale, cx: cur.cx, cy: cur.cy });
+            const kf = newKeyframe(t, { scale: nextScale, cx: cur.cx, cy: cur.cy }, item.crop);
             setMediaItems(prev => prev.map(m => m.id === item.id
                 ? { ...m, keyframes: [...(m.keyframes || []), kf] } : m));
             setSelectedKeyframeId(kf.id);
@@ -1280,9 +1286,12 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                             reveals middle-out while fading in. */}
                         {mediaItems.map(item => {
                             const shown = activeMediaId === item.id;
-                            const imgW = 1080 - TEXT_COLUMN_PAD_LEFT * 2;
-                            // Editable only when this image is selected, on-screen and paused.
+                            const boxW = item.width || MEDIA_IMAGE_WIDTH;
+                            // Editable only when this item is selected, on-screen and paused.
                             const editable = shown && selectedMediaId === item.id && !isPlaying;
+                            // left/top/width/height are owned by the per-frame rAF loop; keep
+                            // them OUT of the React style prop so re-renders don't reset them.
+                            const elStyle = { position: 'absolute', willChange: 'left, top, width, height', pointerEvents: 'none', userSelect: 'none' };
                             return (
                                 <div
                                     key={item.id}
@@ -1291,7 +1300,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                     style={{
                                         alignSelf: 'center',
                                         position: 'relative',
-                                        width: imgW,
+                                        width: boxW,
                                         height: shown ? item.height : 0,
                                         marginTop: shown ? MEDIA_IMAGE_GAP : 0,
                                         opacity: shown ? 1 : 0,
@@ -1303,31 +1312,26 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                         transition: `height ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, margin-top ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, opacity ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`
                                     }}
                                 >
-                                    <div style={{ position: 'absolute', top: '50%', left: 0, width: '100%', height: item.height, transform: 'translateY(-50%)' }}>
-                                        {/* Keyframe pan/zoom target: transformed imperatively
-                                            (transform-origin 0 0) each frame; clipped by the
-                                            reveal block's overflow:hidden above. */}
-                                        <div
-                                            ref={el => { mediaViewRefs.current[item.id] = el; }}
-                                            style={{ width: '100%', height: '100%', transformOrigin: '0 0', willChange: 'transform' }}
-                                        >
-                                            {item.type === 'video' ? (
-                                                <CroppedVideo
-                                                    ref={el => { mediaVideoRefs.current[item.id] = el; }}
-                                                    src={item.src}
-                                                    boxW={imgW}
-                                                    boxH={item.height}
-                                                    crop={item.crop}
-                                                />
-                                            ) : (
-                                                <CroppedImage
-                                                    src={item.src}
-                                                    boxW={imgW}
-                                                    boxH={item.height}
-                                                    crop={item.crop}
-                                                />
-                                            )}
-                                        </div>
+                                    {/* A box-sized window (overflow hidden) over the raw full-source
+                                        element, positioned imperatively each frame to show the current
+                                        pan/zoom view (which can pan across the whole source). */}
+                                    <div style={{ position: 'absolute', top: '50%', left: 0, width: '100%', height: item.height, transform: 'translateY(-50%)', overflow: 'hidden' }}>
+                                        {item.type === 'video' ? (
+                                            <video
+                                                ref={el => { mediaElRefs.current[item.id] = el; mediaVideoRefs.current[item.id] = el; }}
+                                                src={item.src}
+                                                muted playsInline preload="auto" draggable={false}
+                                                style={elStyle}
+                                            />
+                                        ) : (
+                                            <img
+                                                ref={el => { mediaElRefs.current[item.id] = el; }}
+                                                src={item.src}
+                                                alt=""
+                                                draggable={false}
+                                                style={elStyle}
+                                            />
+                                        )}
                                     </div>
                                 </div>
                             );
