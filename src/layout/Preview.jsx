@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 
 import { EditorContext } from '../context/EditorContext';
 import { getBehaviors, newComponentDefaults } from '../utils/componentStyle';
 import { CroppedImage } from '../components/CroppedImage';
-import { MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, TEXT_COLUMN_PAD_LEFT, getMediaGeometry, getActiveMediaItem } from '../utils/mediaLayout';
+import { MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, TEXT_COLUMN_PAD_LEFT, MEDIA_IMAGE_WIDTH, getMediaGeometry, getActiveMediaItem, sampleKeyframes, mediaViewTransform, mediaLocalProgress, DEFAULT_VIEW } from '../utils/mediaLayout';
 
 export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const { 
@@ -40,6 +40,11 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     
     const lineTimerRef = useRef(null);
     const [renderedWords, setRenderedWords] = useState([]);
+
+    // One transform target per big image, driven imperatively every frame so the
+    // keyframe pan/zoom animates smoothly (and tracks scrubbing) without React
+    // re-rendering the image element on every tick.
+    const mediaViewRefs = useRef({});
 
     // Always hand the re-measurement the LATEST line durations. lineSettings is
     // intentionally kept out of the measure effect's deps (adding it would loop),
@@ -483,6 +488,27 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         setActiveMediaId(activeMedia ? activeMedia.id : null);
         // eslint-disable-next-line
     }, [mediaItems]);
+
+    // Drive each big image's keyframe pan/zoom from the shared playback clock,
+    // every frame, so it animates during playback and follows the playhead while
+    // scrubbing. Images without keyframes stay at the identity transform.
+    useEffect(() => {
+        let raf;
+        const loop = () => {
+            const t = currentTimeRef.current;
+            for (const item of mediaItems) {
+                const el = mediaViewRefs.current[item.id];
+                if (!el) continue;
+                const view = (item.keyframes && item.keyframes.length)
+                    ? sampleKeyframes(item.keyframes, mediaLocalProgress(item, t))
+                    : DEFAULT_VIEW;
+                el.style.transform = mediaViewTransform(view, MEDIA_IMAGE_WIDTH, item.height);
+            }
+            raf = requestAnimationFrame(loop);
+        };
+        raf = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(raf);
+    }, [mediaItems, currentTimeRef]);
 
     // Navigation Helpers
     const setTimeAndSync = (newTime) => {
@@ -1139,12 +1165,20 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                     }}
                                 >
                                     <div style={{ position: 'absolute', top: '50%', left: 0, width: '100%', height: item.height, transform: 'translateY(-50%)' }}>
-                                        <CroppedImage
-                                            src={item.src}
-                                            boxW={imgW}
-                                            boxH={item.height}
-                                            crop={item.crop}
-                                        />
+                                        {/* Keyframe pan/zoom target: transformed imperatively
+                                            (transform-origin 0 0) each frame; clipped by the
+                                            reveal block's overflow:hidden above. */}
+                                        <div
+                                            ref={el => { mediaViewRefs.current[item.id] = el; }}
+                                            style={{ width: '100%', height: '100%', transformOrigin: '0 0', willChange: 'transform' }}
+                                        >
+                                            <CroppedImage
+                                                src={item.src}
+                                                boxW={imgW}
+                                                boxH={item.height}
+                                                crop={item.crop}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             );

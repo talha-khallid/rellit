@@ -122,7 +122,12 @@ export const MediaLibrary = () => {
                                     <div className="comp-thumb">
                                         <CroppedImage src={item.src} boxW={30} boxH={30} crop={item.crop} />
                                     </div>
-                                    <span className="comp-card-title">{item.start.toFixed(1)}s – {(item.start + item.duration).toFixed(1)}s</span>
+                                    <span className="comp-card-title">
+                                        {item.start.toFixed(1)}s – {(item.start + item.duration).toFixed(1)}s
+                                        {item.keyframes?.length > 0 && (
+                                            <span className="motion-badge" title={`${item.keyframes.length} motion keyframe${item.keyframes.length > 1 ? 's' : ''}`}>⤢ {item.keyframes.length}</span>
+                                        )}
+                                    </span>
                                     <button className="icon-btn danger" title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <polyline points="3 6 5 6 21 6"></polyline>
@@ -152,7 +157,7 @@ export const MediaLibrary = () => {
                                             </div>
                                         </div>
                                         <button className="btn-ghost" style={{ height: 34, width: '100%' }} onClick={() => setCropModalMediaId(item.id)}>
-                                            Crop & style image
+                                            Crop &amp; motion
                                         </button>
                                     </div>
                                 )}

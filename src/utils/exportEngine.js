@@ -1,6 +1,6 @@
 import * as Mp4Muxer from 'mp4-muxer';
 import { hexToRgb } from './colorUtils';
-import { getMediaFrameGeometry, cropSourceRect, MEDIA_IMAGE_RADIUS } from './mediaLayout';
+import { getMediaFrameGeometry, composeCropView, sampleKeyframes, mediaLocalProgress, MEDIA_IMAGE_RADIUS } from './mediaLayout';
 
 // Trace a rounded-rectangle path (for clipping inline images with a corner
 // radius). Kept manual instead of ctx.roundRect for maximum canvas support.
@@ -252,7 +252,10 @@ export async function exportVideo({
                 const img = preloadedMediaImages[media.item.src];
                 if (img && img.width) {
                     const { left, width, fullHeight, clipTop, clipHeight, centerY, opacity } = media.image;
-                    const { sx, sy, sw, sh } = cropSourceRect(img.width, img.height, media.item.crop);
+                    // Apply the item's pan/zoom keyframes at this instant on top of
+                    // its base crop (Ken Burns inside the fixed container).
+                    const view = sampleKeyframes(media.item.keyframes, mediaLocalProgress(media.item, currentTimeMs / 1000));
+                    const { sx, sy, sw, sh } = composeCropView(img.width, img.height, media.item.crop, view);
                     const radius = media.item.borderRadius ?? MEDIA_IMAGE_RADIUS;
                     ctx.save();
                     ctx.globalAlpha = opacity;

@@ -886,6 +886,82 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 .crop-handle-sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
 .crop-handle-se { bottom: -7px; right: -7px; cursor: nwse-resize; }
 
+/* Crop / Motion tab switcher inside the edit-image popup */
+.crop-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    margin-bottom: 16px;
+}
+.crop-tab {
+    flex: 1;
+    padding: 7px 0;
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.crop-tab:hover { color: #fff; }
+.crop-tab.active { background: var(--accent); color: #fff; }
+
+/* The motion viewport box reuses the crop-box look but stays uniform (no handles). */
+.crop-box.view-box { border-color: var(--accent); }
+
+.motion-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    pointer-events: none;
+}
+
+.motion-controls { margin-bottom: 8px; display: flex; flex-direction: column; gap: 8px; }
+
+.btn-ghost.active-ghost { border-color: var(--accent); color: #fff; background: var(--accent-soft); }
+.btn-ghost.danger-ghost:hover:not(:disabled) { border-color: #e5484d; color: #ff6369; }
+
+/* Keyframe mini-timeline */
+.kf-strip {
+    position: relative;
+    height: 26px;
+    margin: 2px 0 12px 0;
+    cursor: default;
+}
+.kf-strip-line {
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 2px;
+    background: var(--border-strong);
+    border-radius: 1px;
+    transform: translateY(-50%);
+}
+.kf-marker {
+    position: absolute;
+    top: 50%;
+    width: 13px;
+    height: 13px;
+    margin-left: -6.5px;
+    transform: translateY(-50%) rotate(45deg);
+    background: var(--bg-elevated);
+    border: 2px solid var(--text-dim);
+    border-radius: 3px;
+    cursor: ew-resize;
+    transition: border-color 0.12s, background 0.12s;
+}
+.kf-marker:hover { border-color: #fff; }
+.kf-marker.selected { border-color: var(--accent); background: var(--accent); }
+
 .export-progress-view {
     display: flex;
     flex-direction: column;
@@ -1306,6 +1382,17 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
     font-size: 12px;
     font-weight: 600;
     color: var(--text-main);
+}
+.motion-badge {
+    margin-left: 8px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 999px;
+    vertical-align: middle;
+    white-space: nowrap;
 }
 .comp-card-body {
     padding: 12px;

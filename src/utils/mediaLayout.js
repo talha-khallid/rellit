@@ -164,7 +164,95 @@ export const cropOutputHeight = (natW, natH, crop, fallback = 760) => {
 export const newMediaItemDefaults = () => ({
     height: 760,                       // derived from the crop once the image loads
     crop: { ...DEFAULT_CROP },         // normalized [0..1] source rectangle
-    borderRadius: 24                   // rounded corners, adjustable in the editor
+    borderRadius: 24,                  // rounded corners, adjustable in the editor
+    keyframes: []                      // pan/zoom motion inside the container (empty = static)
+});
+
+// --- Keyframe pan/zoom ("motion") inside the fixed image container ----------
+// A big image can carry an ordered list of keyframes describing a viewport that
+// pans/zooms INSIDE its container (a Ken Burns effect) WITHOUT changing the
+// container's on-screen size. A keyframe's view is { scale, cx, cy }:
+//   scale ≥ 1  — zoom factor (1 = the whole crop, 2 = zoomed 2x)
+//   cx, cy     — the focal center within the crop, in [0..1]
+// and `t` is its position in the image's window, a 0..1 fraction of the item's
+// duration (robust to timeline resizes). No keyframes → the static full crop,
+// so existing images are unchanged.
+export const MEDIA_MAX_ZOOM = 4;
+export const DEFAULT_VIEW = { scale: 1, cx: 0.5, cy: 0.5 };
+
+export const clampView = (view) => {
+    const scale = clamp(view?.scale ?? 1, 1, MEDIA_MAX_ZOOM);
+    const half = 0.5 / scale;                 // half the viewport, in crop-space
+    return {
+        scale,
+        cx: clamp(view?.cx ?? 0.5, half, 1 - half),
+        cy: clamp(view?.cy ?? 0.5, half, 1 - half)
+    };
+};
+
+const lerp = (a, b, t) => a + (b - a) * t;
+// Smooth ease-in-out between keyframes so pans/zooms glide instead of snapping.
+const smoothstep = (t) => t * t * (3 - 2 * t);
+
+// Interpolate the view at progress p (0..1 across the item's window) from the
+// keyframe list. 0 keyframes → default (no motion); 1 → that view, constant.
+// Before the first / after the last keyframe the view holds steady.
+export const sampleKeyframes = (keyframes, p) => {
+    if (!keyframes || keyframes.length === 0) return { ...DEFAULT_VIEW };
+    const kfs = [...keyframes].sort((a, b) => a.t - b.t);
+    if (p <= kfs[0].t) return clampView(kfs[0]);
+    const last = kfs[kfs.length - 1];
+    if (p >= last.t) return clampView(last);
+    for (let i = 0; i < kfs.length - 1; i++) {
+        const a = kfs[i], b = kfs[i + 1];
+        if (p >= a.t && p <= b.t) {
+            const span = b.t - a.t;
+            const local = span > 0 ? smoothstep((p - a.t) / span) : 0;
+            const va = clampView(a), vb = clampView(b);
+            return {
+                scale: lerp(va.scale, vb.scale, local),
+                cx: lerp(va.cx, vb.cx, local),
+                cy: lerp(va.cy, vb.cy, local)
+            };
+        }
+    }
+    return clampView(last);
+};
+
+// Compose a keyframe view on top of the base crop → the effective source
+// rectangle in natural pixels. With DEFAULT_VIEW this equals cropSourceRect, so
+// it is a safe drop-in for the export's drawImage source args.
+export const composeCropView = (natW, natH, crop, view) => {
+    const base = cropSourceRect(natW, natH, crop);
+    const v = clampView(view);
+    return {
+        sx: base.sx + (v.cx - 0.5 / v.scale) * base.sw,
+        sy: base.sy + (v.cy - 0.5 / v.scale) * base.sh,
+        sw: base.sw / v.scale,
+        sh: base.sh / v.scale
+    };
+};
+
+// The CSS transform (transform-origin: 0 0) that applies a view to a box-sized,
+// already-cropped image element in the live preview — the exact CSS counterpart
+// of composeCropView, so the editor preview and the export match.
+export const mediaViewTransform = (view, boxW, boxH) => {
+    const v = clampView(view);
+    const tx = boxW / 2 - v.scale * v.cx * boxW;
+    const ty = boxH / 2 - v.scale * v.cy * boxH;
+    return `translate(${tx}px, ${ty}px) scale(${v.scale})`;
+};
+
+// Progress (0..1) through an item's own window at an absolute time.
+export const mediaLocalProgress = (item, timeSec) => {
+    if (!item || item.duration <= 0) return 0;
+    return clamp((timeSec - item.start) / item.duration, 0, 1);
+};
+
+export const newKeyframe = (t = 0, view = DEFAULT_VIEW) => ({
+    id: `kf_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    t: clamp(t, 0, 1),
+    ...clampView(view)
 });
 
 // The single source of truth for the on-screen layout at a given animation
