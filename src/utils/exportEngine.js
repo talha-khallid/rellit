@@ -70,8 +70,37 @@ export async function exportVideo({
         }
         const totalFrames = Math.ceil(totalDuration * fps);
 
-        const hasAnyAudio = segments.some(s => s.audioBuffer);
         let EXPORT_SAMPLE_RATE = 48000;
+
+        // Decode the audio track of any video whose audio is enabled, so it can be
+        // mixed into the export. Decoding at EXPORT_SAMPLE_RATE guarantees the
+        // buffer matches the output rate (decodeAudioData resamples for us).
+        const videoAudioBuffers = {};
+        const wantsVideoAudio = mediaItems.some(m => m.type === 'video' && m.audioEnabled);
+        if (wantsVideoAudio) {
+            let decodeCtx = null;
+            try {
+                decodeCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: EXPORT_SAMPLE_RATE });
+                for (let item of mediaItems) {
+                    if (item.type === 'video' && item.audioEnabled && !(item.src in videoAudioBuffers)) {
+                        try {
+                            const resp = await fetch(item.src);
+                            const ab = await resp.arrayBuffer();
+                            videoAudioBuffers[item.src] = await decodeCtx.decodeAudioData(ab);
+                        } catch (e) {
+                            videoAudioBuffers[item.src] = null; // no audio track / decode failed
+                        }
+                    }
+                }
+            } catch (e) {
+                // Couldn't set up audio decoding — export continues without video audio.
+            } finally {
+                if (decodeCtx) { try { await decodeCtx.close(); } catch (e) { /* ignore */ } }
+            }
+        }
+        const hasVideoAudio = Object.values(videoAudioBuffers).some(Boolean);
+
+        const hasAnyAudio = segments.some(s => s.audioBuffer) || hasVideoAudio;
         let audioCodecConfig = 'mp4a.40.2';
         let muxerAudioCodec = 'aac';
 
@@ -288,8 +317,10 @@ export async function exportVideo({
                     // frame if the block outlasts the clip) before drawing.
                     if (isVideo) {
                         const vidDur = media.item.videoDuration || el.duration || 0;
-                        const rel = (currentTimeMs / 1000) - media.item.start;
-                        const vt = vidDur > 0 ? clamp(rel, 0, vidDur - 0.03) : Math.max(0, rel);
+                        const trimStart = media.item.trimStart || 0;
+                        const rel = Math.min(Math.max((currentTimeMs / 1000) - media.item.start, 0), media.item.duration);
+                        let vt = trimStart + rel;
+                        if (vidDur > 0) vt = clamp(vt, 0, vidDur - 0.03);
                         await seekVideoTo(el, vt);
                     }
                     const { left, width, fullHeight, clipTop, clipHeight, centerY, opacity } = media.image;
@@ -611,36 +642,103 @@ export async function exportVideo({
             await yieldToMain();
 
             const chunkFrames = 4096;
-            let globalTime = 0;
 
-            for (let segIdx = 0; segIdx < segments.length; segIdx++) {
-                let segDuration = 0;
-                for (let i = 0; i < visualLines.length; i++) { if (visualLines[i][0].segIndex == segIdx) segDuration += parseFloat(lineSettings[i].duration); }
+            if (hasVideoAudio) {
+                // Master-mix path: sum narration + enabled video audio into one
+                // stereo timeline (each source placed at its own start), then encode.
+                // Only used when a video contributes audio, so audio-free-video and
+                // narration-only exports keep their original sequential behavior.
+                const masterFrames = Math.max(1, Math.floor(totalDuration * EXPORT_SAMPLE_RATE));
+                const masterL = new Float32Array(masterFrames);
+                const masterR = new Float32Array(masterFrames);
 
-                const decodedAudio = segmentAudioData[segIdx];
-                const segFrames = Math.floor(segDuration * EXPORT_SAMPLE_RATE);
-                let offset = 0;
-
-                while (offset < segFrames) {
-                    const curChunkFrames = Math.min(chunkFrames, segFrames - offset);
-                    const planarData = new Float32Array(2 * curChunkFrames);
-
-                    if (decodedAudio) {
-                        for (let c = 0; c < 2; c++) {
-                            const channelIndex = c < decodedAudio.numberOfChannels ? c : 0;
-                            const channelData = decodedAudio.getChannelData(channelIndex);
-                            const available = Math.max(0, decodedAudio.length - offset);
-                            const copyLen = Math.min(curChunkFrames, available);
-                            if (copyLen > 0) planarData.set(channelData.subarray(offset, offset + copyLen), c * curChunkFrames);
-                        }
+                const mixIn = (buf, destStartFrame, srcStartFrame, maxFrames) => {
+                    if (!buf) return;
+                    const n = Math.min(maxFrames, buf.length - srcStartFrame, masterFrames - destStartFrame);
+                    if (n <= 0) return;
+                    const chL = buf.getChannelData(0);
+                    const chR = buf.numberOfChannels > 1 ? buf.getChannelData(1) : chL;
+                    for (let i = 0; i < n; i++) {
+                        masterL[destStartFrame + i] += chL[srcStartFrame + i];
+                        masterR[destStartFrame + i] += chR[srcStartFrame + i];
                     }
+                };
 
+                // Narration: each segment at its own start time.
+                const segInfo = {};
+                let acc = 0;
+                for (let i = 0; i < visualLines.length; i++) {
+                    const sIdx = visualLines[i][0].segIndex;
+                    const d = parseFloat(lineSettings[i].duration);
+                    if (!(sIdx in segInfo)) segInfo[sIdx] = { start: acc, dur: 0 };
+                    segInfo[sIdx].dur += d;
+                    acc += d;
+                }
+                for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+                    const buf = segmentAudioData[segIdx];
+                    const info = segInfo[segIdx];
+                    if (!buf || !info) continue;
+                    mixIn(buf, Math.floor(info.start * EXPORT_SAMPLE_RATE), 0, Math.floor(info.dur * EXPORT_SAMPLE_RATE));
+                }
+
+                // Enabled video audio: trimmed region at the item's start.
+                for (let item of mediaItems) {
+                    if (item.type !== 'video' || !item.audioEnabled) continue;
+                    const buf = videoAudioBuffers[item.src];
+                    if (!buf) continue;
+                    mixIn(
+                        buf,
+                        Math.floor(item.start * EXPORT_SAMPLE_RATE),
+                        Math.floor((item.trimStart || 0) * EXPORT_SAMPLE_RATE),
+                        Math.floor(item.duration * EXPORT_SAMPLE_RATE)
+                    );
+                }
+
+                let offset = 0, globalTime = 0;
+                while (offset < masterFrames) {
+                    const curChunkFrames = Math.min(chunkFrames, masterFrames - offset);
+                    const planarData = new Float32Array(2 * curChunkFrames);
+                    for (let i = 0; i < curChunkFrames; i++) {
+                        planarData[i] = Math.max(-1, Math.min(1, masterL[offset + i]));
+                        planarData[curChunkFrames + i] = Math.max(-1, Math.min(1, masterR[offset + i]));
+                    }
                     const audioData = new AudioData({ format: 'f32-planar', sampleRate: EXPORT_SAMPLE_RATE, numberOfChannels: 2, numberOfFrames: curChunkFrames, timestamp: (globalTime * 1000000), data: planarData });
                     if (audioEncoder.state === 'configured') audioEncoder.encode(audioData);
                     audioData.close();
-
                     offset += curChunkFrames;
                     globalTime += (curChunkFrames / EXPORT_SAMPLE_RATE);
+                }
+            } else {
+                let globalTime = 0;
+                for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+                    let segDuration = 0;
+                    for (let i = 0; i < visualLines.length; i++) { if (visualLines[i][0].segIndex == segIdx) segDuration += parseFloat(lineSettings[i].duration); }
+
+                    const decodedAudio = segmentAudioData[segIdx];
+                    const segFrames = Math.floor(segDuration * EXPORT_SAMPLE_RATE);
+                    let offset = 0;
+
+                    while (offset < segFrames) {
+                        const curChunkFrames = Math.min(chunkFrames, segFrames - offset);
+                        const planarData = new Float32Array(2 * curChunkFrames);
+
+                        if (decodedAudio) {
+                            for (let c = 0; c < 2; c++) {
+                                const channelIndex = c < decodedAudio.numberOfChannels ? c : 0;
+                                const channelData = decodedAudio.getChannelData(channelIndex);
+                                const available = Math.max(0, decodedAudio.length - offset);
+                                const copyLen = Math.min(curChunkFrames, available);
+                                if (copyLen > 0) planarData.set(channelData.subarray(offset, offset + copyLen), c * curChunkFrames);
+                            }
+                        }
+
+                        const audioData = new AudioData({ format: 'f32-planar', sampleRate: EXPORT_SAMPLE_RATE, numberOfChannels: 2, numberOfFrames: curChunkFrames, timestamp: (globalTime * 1000000), data: planarData });
+                        if (audioEncoder.state === 'configured') audioEncoder.encode(audioData);
+                        audioData.close();
+
+                        offset += curChunkFrames;
+                        globalTime += (curChunkFrames / EXPORT_SAMPLE_RATE);
+                    }
                 }
             }
             await audioEncoder.flush();

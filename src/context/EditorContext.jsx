@@ -108,6 +108,8 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
     // Which big image's crop/edit popup is open (null = closed). Lifted here so
     // both MediaLibrary and the Timeline (double-click) can open it.
     const [cropModalMediaId, setCropModalMediaId] = useState(null);
+    // Which video's trim popup is open (null = closed).
+    const [trimModalMediaId, setTrimModalMediaId] = useState(null);
     // The selected pan/zoom keyframe (on the selected big image), shared between
     // the Timeline (diamonds), the Preview (direct manipulation) and the sidebar.
     const [selectedKeyframeId, setSelectedKeyframeId] = useState(null);
@@ -171,6 +173,7 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
             setSelectedMediaId(null);
             setActiveMediaId(null);
             setCropModalMediaId(null);
+            setTrimModalMediaId(null);
             setSelectedKeyframeId(null);
         });
 
@@ -357,6 +360,7 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
         selectedMediaId, setSelectedMediaId,
         activeMediaId, setActiveMediaId,
         cropModalMediaId, setCropModalMediaId,
+        trimModalMediaId, setTrimModalMediaId,
         selectedKeyframeId, setSelectedKeyframeId,
         saveStatus,
         onGoHome

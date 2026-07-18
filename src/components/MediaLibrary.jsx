@@ -2,6 +2,7 @@ import React, { useContext, useRef } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { CroppedMedia } from './CroppedMedia';
 import { MediaCropModal } from './MediaCropModal';
+import { MediaTrimModal } from './MediaTrimModal';
 import { clampMediaWindow, newMediaItemDefaults, cropOutputHeight, keyframeAt, newKeyframe, normalizeKeyframe, sampleKeyframes, clamp, MEDIA_MAX_ZOOM } from '../utils/mediaLayout';
 
 export const MediaLibrary = () => {
@@ -9,6 +10,7 @@ export const MediaLibrary = () => {
         mediaItems, setMediaItems,
         selectedMediaId, setSelectedMediaId,
         cropModalMediaId, setCropModalMediaId,
+        trimModalMediaId, setTrimModalMediaId,
         selectedKeyframeId, setSelectedKeyframeId,
         visualLines, lineSettings,
         currentTimeRef, setCurrentLineIndex, timelineScale
@@ -50,9 +52,15 @@ export const MediaLibrary = () => {
             const { start, duration } = clampMediaWindow(mediaItems, null, currentTimeRef.current || 0, desired, totalTime);
             const id = `bigvid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
             const height = cropOutputHeight(natW, natH, { x: 0, y: 0, w: 1, h: 1 });
-            const newItem = { id, src, start, duration, videoDuration: vidDur, ...newMediaItemDefaults('video'), height };
+            const newItem = {
+                id, ...newMediaItemDefaults('video'),
+                src, start, duration, height,
+                videoDuration: vidDur, trimStart: 0, audioEnabled: false
+            };
             setMediaItems(prev => [...prev, newItem]);
             setSelectedMediaId(id);
+            // If the clip is longer than the caption timeline, make the user trim it.
+            if (totalTime > 0 && vidDur > totalTime + 0.05) setTrimModalMediaId(id);
         };
         probe.onerror = () => { /* not a decodable video — ignore */ };
         probe.src = src;
@@ -95,10 +103,26 @@ export const MediaLibrary = () => {
         setMediaItems(mediaItems.map(m => m.id === id ? { ...m, start, duration } : m));
     };
 
+    // Trim popup changes: trimStart/audioEnabled are plain, but a duration change
+    // must be re-fit against the other items on the timeline.
+    const updateTrim = (id, patch) => {
+        setMediaItems(prev => prev.map(m => {
+            if (m.id !== id) return m;
+            const merged = { ...m, ...patch };
+            if ('duration' in patch) {
+                const totalTime = getTotalTime();
+                const { start, duration } = clampMediaWindow(prev, id, merged.start, merged.duration, totalTime);
+                return { ...merged, start, duration };
+            }
+            return merged;
+        }));
+    };
+
     const handleDelete = (id) => {
         setMediaItems(mediaItems.filter(m => m.id !== id));
         if (selectedMediaId === id) setSelectedMediaId(null);
         if (cropModalMediaId === id) setCropModalMediaId(null);
+        if (trimModalMediaId === id) setTrimModalMediaId(null);
     };
 
     // --- Motion keyframes ----------------------------------------------------
@@ -144,6 +168,7 @@ export const MediaLibrary = () => {
 
     const sorted = [...mediaItems].sort((a, b) => a.start - b.start);
     const cropItem = cropModalMediaId ? mediaItems.find(m => m.id === cropModalMediaId) : null;
+    const trimItem = trimModalMediaId ? mediaItems.find(m => m.id === trimModalMediaId && m.type === 'video') : null;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -230,6 +255,22 @@ export const MediaLibrary = () => {
                                             Crop &amp; style
                                         </button>
 
+                                        {item.type === 'video' && (
+                                            <>
+                                                <button className="btn-ghost" style={{ height: 34, width: '100%' }} onClick={() => setTrimModalMediaId(item.id)}>
+                                                    Trim video
+                                                </button>
+                                                <label className="media-audio-toggle">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!item.audioEnabled}
+                                                        onChange={e => updateItem(item.id, { audioEnabled: e.target.checked })}
+                                                    />
+                                                    Play video audio
+                                                </label>
+                                            </>
+                                        )}
+
                                         {/* Motion (pan/zoom keyframes) */}
                                         {(() => {
                                             const kfs = [...(item.keyframes || [])].sort((a, b) => a.t - b.t);
@@ -305,6 +346,15 @@ export const MediaLibrary = () => {
                     item={cropItem}
                     onChange={(patch) => updateItem(cropItem.id, patch)}
                     onClose={() => setCropModalMediaId(null)}
+                />
+            )}
+
+            {trimItem && (
+                <MediaTrimModal
+                    item={trimItem}
+                    editingDuration={getTotalTime()}
+                    onChange={(patch) => updateTrim(trimItem.id, patch)}
+                    onClose={() => setTrimModalMediaId(null)}
                 />
             )}
         </div>

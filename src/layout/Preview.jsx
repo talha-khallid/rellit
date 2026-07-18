@@ -498,13 +498,18 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     // while it's on-screen and playing, seek to the exact frame while scrubbing,
     // and freeze on the last frame if the block outlasts the clip.
     const syncVideoEl = (v, item, t) => {
+        // Reflect the per-video audio toggle (default muted).
+        const wantMuted = !item.audioEnabled;
+        if (v.muted !== wantMuted) v.muted = wantMuted;
         const active = t >= item.start && t < item.start + item.duration;
         if (!active) { if (!v.paused) v.pause(); return; }
         const vidDur = item.videoDuration || v.duration || 0;
-        const rel = t - item.start;
-        const ended = vidDur > 0 && rel >= vidDur;
-        const target = vidDur > 0 ? Math.min(Math.max(rel, 0), vidDur - 0.03) : Math.max(rel, 0);
-        if (isPlaying && !ended) {
+        const trimStart = item.trimStart || 0;
+        // Source time = trim offset + how far we are into the block.
+        const rel = Math.min(Math.max(t - item.start, 0), item.duration);
+        let target = trimStart + rel;
+        if (vidDur > 0) target = Math.min(target, vidDur - 0.03);
+        if (isPlaying) {
             if (v.paused) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
             if (Math.abs(v.currentTime - target) > 0.25) { try { v.currentTime = target; } catch (e) { /* seek race */ } }
         } else {
