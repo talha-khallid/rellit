@@ -886,81 +886,82 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 .crop-handle-sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
 .crop-handle-se { bottom: -7px; right: -7px; cursor: nwse-resize; }
 
-/* Crop / Motion tab switcher inside the edit-image popup */
-.crop-tabs {
-    display: flex;
-    gap: 4px;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 3px;
-    margin-bottom: 16px;
+.btn-ghost.danger-ghost:hover:not(:disabled) { border-color: #e5484d; color: #ff6369; }
+
+/* Pan/zoom keyframe diamonds on the media timeline block */
+.kf-diamond {
+    position: absolute;
+    top: 50%;
+    width: 11px;
+    height: 11px;
+    margin-left: -5.5px;
+    transform: translateY(-50%) rotate(45deg);
+    background: #fff;
+    border: 1.5px solid rgba(0, 0, 0, 0.55);
+    border-radius: 2px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    cursor: ew-resize;
+    z-index: 6;
+    transition: background 0.1s, border-color 0.1s;
 }
-.crop-tab {
-    flex: 1;
-    padding: 7px 0;
-    background: transparent;
-    border: none;
-    border-radius: 5px;
+.kf-diamond:hover { background: var(--accent-soft); }
+.kf-diamond.selected {
+    background: var(--accent);
+    border-color: #fff;
+    width: 13px;
+    height: 13px;
+    margin-left: -6.5px;
+}
+
+/* Motion (keyframe) section in the Media sidebar card */
+.motion-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.motion-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
     color: var(--text-muted);
-    font-size: 12px;
+}
+.btn-mini {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 4px 9px;
+    font-size: 11px;
     font-weight: 600;
     font-family: inherit;
     cursor: pointer;
     transition: all 0.15s;
 }
-.crop-tab:hover { color: #fff; }
-.crop-tab.active { background: var(--accent); color: #fff; }
-
-/* The motion viewport box reuses the crop-box look but stays uniform (no handles). */
-.crop-box.view-box { border-color: var(--accent); }
-
-.motion-empty {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.7);
-    pointer-events: none;
+.btn-mini:hover { background: var(--accent); color: #fff; }
+.motion-hint { font-size: 11px; color: var(--text-muted); line-height: 1.5; margin: 0; }
+.motion-hint b { color: var(--text-dim); font-weight: 600; }
+.kf-chip-row { display: flex; flex-wrap: wrap; gap: 5px; }
+.kf-chip {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.12s;
 }
-
-.motion-controls { margin-bottom: 8px; display: flex; flex-direction: column; gap: 8px; }
-
-.btn-ghost.active-ghost { border-color: var(--accent); color: #fff; background: var(--accent-soft); }
-.btn-ghost.danger-ghost:hover:not(:disabled) { border-color: #e5484d; color: #ff6369; }
-
-/* Keyframe mini-timeline */
-.kf-strip {
-    position: relative;
-    height: 26px;
-    margin: 2px 0 12px 0;
-    cursor: default;
-}
-.kf-strip-line {
-    position: absolute;
-    left: 0; right: 0; top: 50%;
-    height: 2px;
-    background: var(--border-strong);
-    border-radius: 1px;
-    transform: translateY(-50%);
-}
-.kf-marker {
-    position: absolute;
-    top: 50%;
-    width: 13px;
-    height: 13px;
-    margin-left: -6.5px;
-    transform: translateY(-50%) rotate(45deg);
-    background: var(--bg-elevated);
-    border: 2px solid var(--text-dim);
-    border-radius: 3px;
-    cursor: ew-resize;
-    transition: border-color 0.12s, background 0.12s;
-}
-.kf-marker:hover { border-color: #fff; }
-.kf-marker.selected { border-color: var(--accent); background: var(--accent); }
+.kf-chip:hover { border-color: var(--border-strong); color: #fff; }
+.kf-chip.selected { border-color: var(--accent); background: var(--accent-soft); color: #fff; }
 
 .export-progress-view {
     display: flex;

@@ -255,6 +255,22 @@ export const newKeyframe = (t = 0, view = DEFAULT_VIEW) => ({
     ...clampView(view)
 });
 
+// The keyframe at (or within tEps of) normalized time t, else null. Lets the
+// timeline / direct-manipulation editing decide whether to update the keyframe
+// under the playhead or create a fresh one.
+export const keyframeAt = (keyframes, t, tEps = 0.01) => {
+    if (!keyframes || !keyframes.length) return null;
+    let best = null, bestD = tEps;
+    for (const k of keyframes) {
+        const d = Math.abs(k.t - t);
+        if (d <= bestD) { best = k; bestD = d; }
+    }
+    return best;
+};
+
+// Re-clamp a keyframe after an edit (keeps id + time, clamps the view).
+export const normalizeKeyframe = (k) => ({ id: k.id, t: clamp(k.t ?? 0, 0, 1), ...clampView(k) });
+
 // The single source of truth for the on-screen layout at a given animation
 // `progress` (0 = no image / captions at rest, 1 = image fully shown / captions
 // compact). It models exactly what a centered CSS flex column does:

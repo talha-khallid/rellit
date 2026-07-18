@@ -108,6 +108,9 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
     // Which big image's crop/edit popup is open (null = closed). Lifted here so
     // both MediaLibrary and the Timeline (double-click) can open it.
     const [cropModalMediaId, setCropModalMediaId] = useState(null);
+    // The selected pan/zoom keyframe (on the selected big image), shared between
+    // the Timeline (diamonds), the Preview (direct manipulation) and the sidebar.
+    const [selectedKeyframeId, setSelectedKeyframeId] = useState(null);
 
     // Load project from the SQLite-backed API
     useEffect(() => {
@@ -168,6 +171,7 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
             setSelectedMediaId(null);
             setActiveMediaId(null);
             setCropModalMediaId(null);
+            setSelectedKeyframeId(null);
         });
 
         return () => { cancelled = true; };
@@ -353,6 +357,7 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
         selectedMediaId, setSelectedMediaId,
         activeMediaId, setActiveMediaId,
         cropModalMediaId, setCropModalMediaId,
+        selectedKeyframeId, setSelectedKeyframeId,
         saveStatus,
         onGoHome
     };

@@ -1,7 +1,7 @@
 import React, { useContext, useRef, useState, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { AudioWaveform } from '../components/AudioWaveform';
-import { clampMediaWindow } from '../utils/mediaLayout';
+import { clampMediaWindow, keyframeAt, newKeyframe, sampleKeyframes, clamp } from '../utils/mediaLayout';
 
 export const Timeline = () => {
     const {
@@ -15,7 +15,8 @@ export const Timeline = () => {
         selectedMediaId, setSelectedMediaId,
         activeMediaId,
         setActiveTab,
-        cropModalMediaId, setCropModalMediaId
+        cropModalMediaId, setCropModalMediaId,
+        selectedKeyframeId, setSelectedKeyframeId
     } = useContext(EditorContext);
 
     const [isResizing, setIsResizing] = useState(false);
@@ -34,6 +35,13 @@ export const Timeline = () => {
     const [resizeMediaId, setResizeMediaId] = useState(null);
     const [mediaResizeStartX, setMediaResizeStartX] = useState(0);
     const [mediaInitialDur, setMediaInitialDur] = useState(0);
+
+    // Keyframe diamond: drag-to-retime
+    const [isMovingKf, setIsMovingKf] = useState(false);
+    const [moveKfItemId, setMoveKfItemId] = useState(null);
+    const [moveKfId, setMoveKfId] = useState(null);
+    const [kfMoveStartX, setKfMoveStartX] = useState(0);
+    const [kfMoveStartT, setKfMoveStartT] = useState(0);
 
     const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
     const scrollAreaRef = useRef(null);
@@ -156,6 +164,34 @@ export const Timeline = () => {
         window.dispatchEvent(new CustomEvent('timeupdate-seek'));
     };
 
+    // Move the playhead to an absolute time (used when clicking a keyframe so the
+    // preview shows that exact moment).
+    const seekToTime = (targetTime) => {
+        const t = Math.max(0, targetTime);
+        currentTimeRef.current = t;
+        let targetLineIndex = visualLines.length - 1;
+        for (let i = 0; i < lineBlocks.length; i++) {
+            if (t >= lineBlocks[i].start && t <= lineBlocks[i].start + lineBlocks[i].duration) { targetLineIndex = i; break; }
+        }
+        if (t === 0) targetLineIndex = 0;
+        setCurrentLineIndex(targetLineIndex);
+        window.dispatchEvent(new CustomEvent('timeupdate-seek'));
+    };
+
+    const startKfMove = (item, kf) => (e) => {
+        e.stopPropagation();
+        if (isPlaying) togglePlayback();
+        setSelectedMediaId(item.id);
+        setActiveTab('bigMedia');
+        setSelectedKeyframeId(kf.id);
+        seekToTime(item.start + kf.t * item.duration);
+        setIsMovingKf(true);
+        setMoveKfItemId(item.id);
+        setMoveKfId(kf.id);
+        setKfMoveStartX(e.clientX);
+        setKfMoveStartT(kf.t);
+    };
+
     useEffect(() => {
         const handleMouseMove = (e) => {
             if (isResizing) {
@@ -210,6 +246,18 @@ export const Timeline = () => {
                     const { start, duration } = clampMediaWindow(mediaItems, resizeMediaId, current.start, newDur, totalTime);
                     setMediaItems(mediaItems.map(m => m.id === resizeMediaId ? { ...m, start, duration } : m));
                 }
+            } else if (isMovingKf) {
+                const item = mediaItems.find(m => m.id === moveKfItemId);
+                if (item && item.duration > 0) {
+                    const dt = (e.clientX - kfMoveStartX) / (item.duration * timelineScale);
+                    const newT = Math.max(0, Math.min(1, kfMoveStartT + dt));
+                    setMediaItems(mediaItems.map(m => m.id === moveKfItemId
+                        ? { ...m, keyframes: (m.keyframes || []).map(k => k.id === moveKfId ? { ...k, t: newT } : k) }
+                        : m));
+                    // Keep the playhead on the keyframe so the preview tracks it.
+                    currentTimeRef.current = item.start + newT * item.duration;
+                    window.dispatchEvent(new CustomEvent('timeupdate-seek'));
+                }
             } else if (isDraggingPlayhead) {
                 seekTimeline(e);
             }
@@ -220,6 +268,7 @@ export const Timeline = () => {
             if (isDraggingPlayhead) setIsDraggingPlayhead(false);
             if (isMovingMedia) setIsMovingMedia(false);
             if (isResizingMedia) setIsResizingMedia(false);
+            if (isMovingKf) setIsMovingKf(false);
         };
 
         document.addEventListener('mousemove', handleMouseMove);
@@ -233,6 +282,7 @@ export const Timeline = () => {
         isResizing, isDraggingPlayhead, startX, initialDur, timelineScale, resizeLineIdx, lineSettings, visualLines, segments,
         isMovingMedia, moveMediaId, moveStartX, moveOrigStart,
         isResizingMedia, resizeMediaId, mediaResizeStartX, mediaInitialDur,
+        isMovingKf, moveKfItemId, moveKfId, kfMoveStartX, kfMoveStartT,
         mediaItems, totalTime
     ]);
     // Keyboard shortcuts for the currently selected big image.
@@ -259,8 +309,35 @@ export const Timeline = () => {
 
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 e.preventDefault();
-                setMediaItems(mediaItems.filter(m => m.id !== selectedMediaId));
-                setSelectedMediaId(null);
+                // If a keyframe on this image is selected, delete just that keyframe;
+                // otherwise delete the whole image.
+                if (selectedKeyframeId && (item.keyframes || []).some(k => k.id === selectedKeyframeId)) {
+                    setMediaItems(mediaItems.map(m => m.id === selectedMediaId
+                        ? { ...m, keyframes: (m.keyframes || []).filter(k => k.id !== selectedKeyframeId) }
+                        : m));
+                    setSelectedKeyframeId(null);
+                } else {
+                    setMediaItems(mediaItems.filter(m => m.id !== selectedMediaId));
+                    setSelectedMediaId(null);
+                    setSelectedKeyframeId(null);
+                }
+            } else if (e.key === 'k' || e.key === 'K') {
+                // Add (or select) a keyframe at the playhead, if it's inside this image.
+                const tAbs = currentTimeRef.current;
+                if (item.duration > 0 && tAbs >= item.start && tAbs <= item.start + item.duration) {
+                    e.preventDefault();
+                    const tNorm = (tAbs - item.start) / item.duration;
+                    const tEps = clamp((6 / timelineScale) / item.duration, 0.002, 0.06);
+                    const existing = keyframeAt(item.keyframes || [], tNorm, tEps);
+                    if (existing) {
+                        setSelectedKeyframeId(existing.id);
+                    } else {
+                        const kf = newKeyframe(tNorm, sampleKeyframes(item.keyframes, tNorm));
+                        setMediaItems(mediaItems.map(m => m.id === selectedMediaId
+                            ? { ...m, keyframes: [...(m.keyframes || []), kf] } : m));
+                        setSelectedKeyframeId(kf.id);
+                    }
+                }
             } else if (e.key === 'Enter') {
                 e.preventDefault();
                 setActiveTab('bigMedia');
@@ -286,7 +363,7 @@ export const Timeline = () => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedMediaId, cropModalMediaId, mediaItems, totalTime, setMediaItems, setSelectedMediaId, setActiveTab, setCropModalMediaId]);
+    }, [selectedMediaId, selectedKeyframeId, cropModalMediaId, mediaItems, totalTime, timelineScale, currentTimeRef, setMediaItems, setSelectedMediaId, setSelectedKeyframeId, setActiveTab, setCropModalMediaId]);
 
     useEffect(() => {
         const area = scrollAreaRef.current;
@@ -444,12 +521,14 @@ export const Timeline = () => {
                                 <div
                                     key={item.id}
                                     className={`timeline-block media-block ${activeMediaId === item.id ? 'active' : ''} ${selectedMediaId === item.id ? 'selected' : ''}`}
-                                    title="Double-click to edit · Delete to remove · ←/→ to nudge"
+                                    title="Double-click to crop · K adds a pan/zoom keyframe at the playhead · Delete removes · ←/→ nudge"
                                     style={{ left: item.start * timelineScale, width: Math.max(4, item.duration * timelineScale), top: 0, height: '100%' }}
                                     onMouseDown={(e) => {
                                         if (e.target.closest('.resize-handle-right')) return;
+                                        if (e.target.closest('.kf-diamond')) return;
                                         if (isPlaying) togglePlayback();
                                         setSelectedMediaId(item.id);
+                                        setSelectedKeyframeId(null);
                                         setActiveTab('bigMedia');
                                         setIsMovingMedia(true);
                                         setMoveMediaId(item.id);
@@ -466,6 +545,18 @@ export const Timeline = () => {
                                 >
                                     <img src={item.src} alt="" className="media-block-thumb" />
                                     <span className="block-text-label">Image</span>
+
+                                    {/* Pan/zoom keyframes — visible & editable when this image is selected */}
+                                    {selectedMediaId === item.id && (item.keyframes || []).map(kf => (
+                                        <div
+                                            key={kf.id}
+                                            className={`kf-diamond ${selectedKeyframeId === kf.id ? 'selected' : ''}`}
+                                            style={{ left: `${kf.t * 100}%` }}
+                                            title={`${(item.start + kf.t * item.duration).toFixed(2)}s · ${kf.scale.toFixed(2)}x`}
+                                            onMouseDown={startKfMove(item, kf)}
+                                        />
+                                    ))}
+
                                     <div
                                         className="resize-handle-right"
                                         onMouseDown={(e) => {

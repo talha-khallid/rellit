@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 
 import { EditorContext } from '../context/EditorContext';
 import { getBehaviors, newComponentDefaults } from '../utils/componentStyle';
 import { CroppedImage } from '../components/CroppedImage';
-import { MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, TEXT_COLUMN_PAD_LEFT, MEDIA_IMAGE_WIDTH, getMediaGeometry, getActiveMediaItem, sampleKeyframes, mediaViewTransform, mediaLocalProgress, DEFAULT_VIEW } from '../utils/mediaLayout';
+import { MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, TEXT_COLUMN_PAD_LEFT, MEDIA_IMAGE_WIDTH, MEDIA_MAX_ZOOM, getMediaGeometry, getActiveMediaItem, sampleKeyframes, mediaViewTransform, mediaLocalProgress, keyframeAt, normalizeKeyframe, newKeyframe, clamp, DEFAULT_VIEW } from '../utils/mediaLayout';
 
 export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const { 
@@ -21,7 +21,8 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing,
         customComponents, setCustomComponents, setSegments,
         armedComponentId, setArmedComponentId,
-        mediaItems, activeMediaId, setActiveMediaId
+        mediaItems, setMediaItems, activeMediaId, setActiveMediaId,
+        selectedMediaId, setSelectedKeyframeId
     } = useContext(EditorContext);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -509,6 +510,103 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         raf = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(raf);
     }, [mediaItems, currentTimeRef]);
+
+    // ---- Direct manipulation of a big image's pan/zoom on the preview --------
+    // When a big image is selected and paused, dragging it pans and scrolling
+    // zooms — writing to the keyframe under the playhead (creating one there if
+    // needed). The per-frame driver above then reflects the edit live.
+    const mediaEditRef = useRef(null);
+    const [mediaPanning, setMediaPanning] = useState(false);
+
+    const kfTolerance = (item) =>
+        (item.duration > 0) ? clamp((6 / timelineScale) / item.duration, 0.002, 0.06) : 0.02;
+
+    const updateMediaKf = (itemId, kfId, patch) => {
+        setMediaItems(prev => prev.map(m => m.id === itemId
+            ? { ...m, keyframes: (m.keyframes || []).map(k => k.id === kfId ? normalizeKeyframe({ ...k, ...patch }) : k) }
+            : m));
+    };
+
+    // Ensure a keyframe exists at the playhead for `item`, seeded from the view
+    // currently shown there. Returns { id, view } to use as the drag base.
+    const ensureKfAtPlayhead = (item) => {
+        const t = mediaLocalProgress(item, currentTimeRef.current);
+        const existing = keyframeAt(item.keyframes || [], t, kfTolerance(item));
+        if (existing) return { id: existing.id, view: existing };
+        const view = sampleKeyframes(item.keyframes, t);
+        const kf = newKeyframe(t, view);
+        setMediaItems(prev => prev.map(m => m.id === item.id
+            ? { ...m, keyframes: [...(m.keyframes || []), kf] } : m));
+        setSelectedKeyframeId(kf.id);
+        return { id: kf.id, view: kf };
+    };
+
+    const beginMediaPan = (item) => (e) => {
+        if (isPlaying) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const t = mediaLocalProgress(item, currentTimeRef.current);
+        const base = sampleKeyframes(item.keyframes, t); // current on-screen view
+        mediaEditRef.current = {
+            itemId: item.id, height: item.height,
+            startX: e.clientX, startY: e.clientY,
+            baseCx: base.cx, baseCy: base.cy, scale: base.scale,
+            kfId: null, moved: false
+        };
+        setMediaPanning(true);
+    };
+
+    useEffect(() => {
+        if (!mediaPanning) return;
+        const move = (e) => {
+            const d = mediaEditRef.current;
+            if (!d) return;
+            if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 3) return;
+            if (!d.moved) {
+                d.moved = true;
+                const item = mediaItems.find(m => m.id === d.itemId);
+                if (!item) return;
+                const ensured = ensureKfAtPlayhead(item);
+                d.kfId = ensured.id;
+                d.baseCx = ensured.view.cx;
+                d.baseCy = ensured.view.cy;
+                d.scale = ensured.view.scale;
+            }
+            const dxLogical = (e.clientX - d.startX) / (screenScale || 1);
+            const dyLogical = (e.clientY - d.startY) / (screenScale || 1);
+            // Content follows the cursor: dragging right reveals the left of the image.
+            const newCx = d.baseCx - dxLogical / (MEDIA_IMAGE_WIDTH * d.scale);
+            const newCy = d.baseCy - dyLogical / (d.height * d.scale);
+            updateMediaKf(d.itemId, d.kfId, { cx: newCx, cy: newCy });
+        };
+        const up = () => { setMediaPanning(false); mediaEditRef.current = null; };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up);
+        return () => {
+            window.removeEventListener('mousemove', move);
+            window.removeEventListener('mouseup', up);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mediaPanning, mediaItems, screenScale]);
+
+    const handleMediaWheel = (item) => (e) => {
+        if (isPlaying) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const t = mediaLocalProgress(item, currentTimeRef.current);
+        const existing = keyframeAt(item.keyframes || [], t, kfTolerance(item));
+        const cur = existing || sampleKeyframes(item.keyframes, t);
+        const nextScale = clamp(cur.scale * (e.deltaY < 0 ? 1.08 : 1 / 1.08), 1, MEDIA_MAX_ZOOM);
+        if (existing) {
+            updateMediaKf(item.id, existing.id, { scale: nextScale });
+            setSelectedKeyframeId(existing.id);
+        } else {
+            const kf = newKeyframe(t, { scale: nextScale, cx: cur.cx, cy: cur.cy });
+            setMediaItems(prev => prev.map(m => m.id === item.id
+                ? { ...m, keyframes: [...(m.keyframes || []), kf] } : m));
+            setSelectedKeyframeId(kf.id);
+        }
+    };
 
     // Navigation Helpers
     const setTimeAndSync = (newTime) => {
@@ -1148,9 +1246,13 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                         {mediaItems.map(item => {
                             const shown = activeMediaId === item.id;
                             const imgW = 1080 - TEXT_COLUMN_PAD_LEFT * 2;
+                            // Editable only when this image is selected, on-screen and paused.
+                            const editable = shown && selectedMediaId === item.id && !isPlaying;
                             return (
                                 <div
                                     key={item.id}
+                                    onMouseDown={editable ? beginMediaPan(item) : undefined}
+                                    onWheel={editable ? handleMediaWheel(item) : undefined}
                                     style={{
                                         alignSelf: 'center',
                                         position: 'relative',
@@ -1160,7 +1262,9 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                         opacity: shown ? 1 : 0,
                                         overflow: 'hidden',
                                         borderRadius: item.borderRadius ?? MEDIA_IMAGE_RADIUS,
-                                        pointerEvents: 'none',
+                                        pointerEvents: editable ? 'auto' : 'none',
+                                        cursor: editable ? (mediaPanning ? 'grabbing' : 'grab') : 'default',
+                                        boxShadow: editable ? 'inset 0 0 0 3px var(--accent)' : 'none',
                                         transition: `height ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, margin-top ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, opacity ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`
                                     }}
                                 >

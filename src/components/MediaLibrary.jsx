@@ -2,15 +2,16 @@ import React, { useContext, useRef } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { CroppedImage } from './CroppedImage';
 import { MediaCropModal } from './MediaCropModal';
-import { clampMediaWindow, newMediaItemDefaults, cropOutputHeight } from '../utils/mediaLayout';
+import { clampMediaWindow, newMediaItemDefaults, cropOutputHeight, keyframeAt, newKeyframe, normalizeKeyframe, sampleKeyframes, clamp, MEDIA_MAX_ZOOM } from '../utils/mediaLayout';
 
 export const MediaLibrary = () => {
     const {
         mediaItems, setMediaItems,
         selectedMediaId, setSelectedMediaId,
         cropModalMediaId, setCropModalMediaId,
+        selectedKeyframeId, setSelectedKeyframeId,
         visualLines, lineSettings,
-        currentTimeRef
+        currentTimeRef, setCurrentLineIndex, timelineScale
     } = useContext(EditorContext);
 
     const fileInputRef = useRef(null);
@@ -71,6 +72,47 @@ export const MediaLibrary = () => {
         setMediaItems(mediaItems.filter(m => m.id !== id));
         if (selectedMediaId === id) setSelectedMediaId(null);
         if (cropModalMediaId === id) setCropModalMediaId(null);
+    };
+
+    // --- Motion keyframes ----------------------------------------------------
+    const seekToTime = (time) => {
+        const t = Math.max(0, time);
+        currentTimeRef.current = t;
+        let acc = 0, idx = 0;
+        for (let i = 0; i < visualLines.length; i++) {
+            const d = parseFloat(lineSettings[i]?.duration || 0.1);
+            if (t >= acc && t < acc + d) { idx = i; break; }
+            acc += d; idx = i;
+        }
+        setCurrentLineIndex(idx);
+        window.dispatchEvent(new CustomEvent('timeupdate-seek'));
+    };
+
+    const updateKf = (itemId, kfId, patch) => {
+        setMediaItems(mediaItems.map(m => m.id === itemId
+            ? { ...m, keyframes: (m.keyframes || []).map(k => k.id === kfId ? normalizeKeyframe({ ...k, ...patch }) : k) }
+            : m));
+    };
+
+    const deleteKf = (itemId, kfId) => {
+        setMediaItems(mediaItems.map(m => m.id === itemId
+            ? { ...m, keyframes: (m.keyframes || []).filter(k => k.id !== kfId) } : m));
+        if (selectedKeyframeId === kfId) setSelectedKeyframeId(null);
+    };
+
+    const addKeyframeAtPlayhead = (item) => {
+        const tAbs = currentTimeRef.current;
+        // Clamp the playhead into the image's window so the keyframe always lands
+        // somewhere valid even if the playhead is currently outside it.
+        const tAbsClamped = Math.min(Math.max(tAbs, item.start), item.start + item.duration);
+        const tNorm = item.duration > 0 ? (tAbsClamped - item.start) / item.duration : 0;
+        const tEps = clamp((6 / timelineScale) / (item.duration || 1), 0.002, 0.06);
+        const existing = keyframeAt(item.keyframes || [], tNorm, tEps);
+        if (existing) { setSelectedKeyframeId(existing.id); seekToTime(item.start + existing.t * item.duration); return; }
+        const kf = newKeyframe(tNorm, sampleKeyframes(item.keyframes, tNorm));
+        setMediaItems(mediaItems.map(m => m.id === item.id ? { ...m, keyframes: [...(m.keyframes || []), kf] } : m));
+        setSelectedKeyframeId(kf.id);
+        seekToTime(item.start + tNorm * item.duration);
     };
 
     const sorted = [...mediaItems].sort((a, b) => a.start - b.start);
@@ -157,8 +199,71 @@ export const MediaLibrary = () => {
                                             </div>
                                         </div>
                                         <button className="btn-ghost" style={{ height: 34, width: '100%' }} onClick={() => setCropModalMediaId(item.id)}>
-                                            Crop &amp; motion
+                                            Crop &amp; style
                                         </button>
+
+                                        {/* Motion (pan/zoom keyframes) */}
+                                        {(() => {
+                                            const kfs = [...(item.keyframes || [])].sort((a, b) => a.t - b.t);
+                                            const selKf = kfs.find(k => k.id === selectedKeyframeId) || null;
+                                            return (
+                                                <div className="motion-section">
+                                                    <div className="motion-head">
+                                                        <span>Motion</span>
+                                                        <button className="btn-mini" onClick={() => addKeyframeAtPlayhead(item)}>+ Keyframe</button>
+                                                    </div>
+
+                                                    {kfs.length === 0 ? (
+                                                        <p className="motion-hint">
+                                                            Move the playhead, then drag the image in the preview to pan (scroll to zoom) — or hit <b>+ Keyframe</b> / <b>K</b>. Add 2+ to create motion.
+                                                        </p>
+                                                    ) : (
+                                                        <>
+                                                            <div className="kf-chip-row">
+                                                                {kfs.map(kf => (
+                                                                    <button
+                                                                        key={kf.id}
+                                                                        className={`kf-chip ${selectedKeyframeId === kf.id ? 'selected' : ''}`}
+                                                                        onClick={() => { setSelectedKeyframeId(kf.id); seekToTime(item.start + kf.t * item.duration); }}
+                                                                    >
+                                                                        {(kf.t * item.duration).toFixed(1)}s · {kf.scale.toFixed(1)}x
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+
+                                                            {selKf ? (
+                                                                <>
+                                                                    <div className="field-row cols-2">
+                                                                        <div className="field">
+                                                                            <label>Time (s)</label>
+                                                                            <input
+                                                                                type="number" step="0.1" min="0" max={item.duration} className="panel-input"
+                                                                                value={(selKf.t * item.duration).toFixed(2)}
+                                                                                onChange={e => updateKf(item.id, selKf.id, { t: item.duration > 0 ? clamp((parseFloat(e.target.value) || 0) / item.duration, 0, 1) : 0 })}
+                                                                            />
+                                                                        </div>
+                                                                        <div className="field">
+                                                                            <label>Zoom ({selKf.scale.toFixed(2)}x)</label>
+                                                                            <input
+                                                                                type="range" min="1" max={MEDIA_MAX_ZOOM} step="0.01"
+                                                                                value={selKf.scale}
+                                                                                onChange={e => updateKf(item.id, selKf.id, { scale: parseFloat(e.target.value) })}
+                                                                                style={{ width: '100%' }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                    <button className="btn-ghost danger-ghost" style={{ height: 30, width: '100%' }} onClick={() => deleteKf(item.id, selKf.id)}>
+                                                                        Delete keyframe
+                                                                    </button>
+                                                                </>
+                                                            ) : (
+                                                                <p className="motion-hint">Click a keyframe (chip above or diamond on the timeline) to edit its zoom &amp; position.</p>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 )}
                             </div>
