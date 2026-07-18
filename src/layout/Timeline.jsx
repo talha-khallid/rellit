@@ -543,8 +543,10 @@ export const Timeline = () => {
                                         setCropModalMediaId(item.id);
                                     }}
                                 >
-                                    <img src={item.src} alt="" className="media-block-thumb" />
-                                    <span className="block-text-label">Image</span>
+                                    {item.type === 'video'
+                                        ? <video src={item.src} className="media-block-thumb" muted preload="metadata" />
+                                        : <img src={item.src} alt="" className="media-block-thumb" />}
+                                    <span className="block-text-label">{item.type === 'video' ? 'Video' : 'Image'}</span>
 
                                     {/* Pan/zoom keyframes — visible & editable when this image is selected */}
                                     {selectedMediaId === item.id && (item.keyframes || []).map(kf => (

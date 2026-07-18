@@ -97,13 +97,24 @@ export const MediaCropModal = ({ item, onChange, onClose }) => {
 
                 <div className="crop-stage-wrap">
                     <div ref={stageRef} className="crop-stage" style={{ width: stageW, height: stageH }}>
-                        <img
-                            src={item.src}
-                            alt=""
-                            draggable={false}
-                            onLoad={e => setNatural({ w: e.target.naturalWidth, h: e.target.naturalHeight })}
-                            style={{ width: '100%', height: '100%', display: 'block', userSelect: 'none' }}
-                        />
+                        {item.type === 'video' ? (
+                            <video
+                                src={item.src}
+                                muted
+                                playsInline
+                                preload="auto"
+                                onLoadedMetadata={e => setNatural({ w: e.target.videoWidth, h: e.target.videoHeight })}
+                                style={{ width: '100%', height: '100%', display: 'block', userSelect: 'none' }}
+                            />
+                        ) : (
+                            <img
+                                src={item.src}
+                                alt=""
+                                draggable={false}
+                                onLoad={e => setNatural({ w: e.target.naturalWidth, h: e.target.naturalHeight })}
+                                style={{ width: '100%', height: '100%', display: 'block', userSelect: 'none' }}
+                            />
+                        )}
                         {/* dim overlay outside the crop box (4px border trick via box-shadow) */}
                         <div
                             className="crop-box"

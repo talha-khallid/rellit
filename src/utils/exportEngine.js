@@ -1,6 +1,19 @@
 import * as Mp4Muxer from 'mp4-muxer';
 import { hexToRgb } from './colorUtils';
-import { getMediaFrameGeometry, composeCropView, sampleKeyframes, mediaLocalProgress, MEDIA_IMAGE_RADIUS } from './mediaLayout';
+import { getMediaFrameGeometry, composeCropView, sampleKeyframes, mediaLocalProgress, clamp, MEDIA_IMAGE_RADIUS } from './mediaLayout';
+
+// Seek a <video> to a time and resolve once the frame is ready to draw. Has a
+// safety timeout so a missed 'seeked' event can't stall the whole export.
+function seekVideoTo(v, time) {
+    return new Promise((resolve) => {
+        if (Math.abs(v.currentTime - time) < 0.001) { resolve(); return; }
+        let done = false;
+        const finish = () => { if (done) return; done = true; v.removeEventListener('seeked', finish); resolve(); };
+        v.addEventListener('seeked', finish);
+        try { v.currentTime = time; } catch (e) { finish(); }
+        setTimeout(finish, 250);
+    });
+}
 
 // Trace a rounded-rectangle path (for clipping inline images with a corner
 // radius). Kept manual instead of ctx.roundRect for maximum canvas support.
@@ -176,8 +189,25 @@ export async function exportVideo({
 
         // Preload big scene images
         const preloadedMediaImages = {};
+        const preloadedMediaVideos = {};
         for (let item of mediaItems) {
-            if (!preloadedMediaImages[item.src]) {
+            if (item.type === 'video') {
+                if (!preloadedMediaVideos[item.src]) {
+                    const v = document.createElement('video');
+                    v.src = item.src;
+                    v.muted = true;
+                    v.playsInline = true;
+                    v.preload = 'auto';
+                    await new Promise((resolve) => {
+                        let done = false;
+                        const ok = () => { if (done) return; done = true; resolve(); };
+                        v.onloadeddata = ok;   // first frame decoded → safe to seek/draw
+                        v.onerror = ok;
+                        setTimeout(ok, 5000);
+                    });
+                    preloadedMediaVideos[item.src] = v;
+                }
+            } else if (!preloadedMediaImages[item.src]) {
                 const img = new Image();
                 img.src = item.src;
                 await new Promise((resolve) => {
@@ -249,21 +279,32 @@ export async function exportVideo({
             // image is full-height and vertically centered inside a growing window
             // (clipTop..clipTop+clipHeight), so it reveals middle-out as it fades in.
             if (media.item && media.image && media.image.clipHeight > 0) {
-                const img = preloadedMediaImages[media.item.src];
-                if (img && img.width) {
+                const isVideo = media.item.type === 'video';
+                const el = isVideo ? preloadedMediaVideos[media.item.src] : preloadedMediaImages[media.item.src];
+                const natW = isVideo ? (el && el.videoWidth) : (el && el.width);
+                const natH = isVideo ? (el && el.videoHeight) : (el && el.height);
+                if (el && natW) {
+                    // For video, seek to the frame at this instant (freeze on the last
+                    // frame if the block outlasts the clip) before drawing.
+                    if (isVideo) {
+                        const vidDur = media.item.videoDuration || el.duration || 0;
+                        const rel = (currentTimeMs / 1000) - media.item.start;
+                        const vt = vidDur > 0 ? clamp(rel, 0, vidDur - 0.03) : Math.max(0, rel);
+                        await seekVideoTo(el, vt);
+                    }
                     const { left, width, fullHeight, clipTop, clipHeight, centerY, opacity } = media.image;
                     // Apply the item's pan/zoom keyframes at this instant on top of
                     // its base crop (Ken Burns inside the fixed container).
                     const view = sampleKeyframes(media.item.keyframes, mediaLocalProgress(media.item, currentTimeMs / 1000));
-                    const { sx, sy, sw, sh } = composeCropView(img.width, img.height, media.item.crop, view);
+                    const { sx, sy, sw, sh } = composeCropView(natW, natH, media.item.crop, view);
                     const radius = media.item.borderRadius ?? MEDIA_IMAGE_RADIUS;
                     ctx.save();
                     ctx.globalAlpha = opacity;
                     // Clip to the revealed window, then draw the full-height cropped
-                    // image centered in it.
+                    // media centered in it.
                     roundRectPath(ctx, left, clipTop, width, clipHeight, Math.min(radius, clipHeight / 2, width / 2));
                     ctx.clip();
-                    ctx.drawImage(img, sx, sy, sw, sh, left, centerY - fullHeight / 2, width, fullHeight);
+                    ctx.drawImage(el, sx, sy, sw, sh, left, centerY - fullHeight / 2, width, fullHeight);
                     ctx.restore();
                 }
             }

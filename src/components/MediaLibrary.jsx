@@ -1,6 +1,6 @@
 import React, { useContext, useRef } from 'react';
 import { EditorContext } from '../context/EditorContext';
-import { CroppedImage } from './CroppedImage';
+import { CroppedMedia } from './CroppedMedia';
 import { MediaCropModal } from './MediaCropModal';
 import { clampMediaWindow, newMediaItemDefaults, cropOutputHeight, keyframeAt, newKeyframe, normalizeKeyframe, sampleKeyframes, clamp, MEDIA_MAX_ZOOM } from '../utils/mediaLayout';
 
@@ -36,11 +36,38 @@ export const MediaLibrary = () => {
         probe.src = src;
     };
 
+    const addVideo = (src) => {
+        // Read the video's intrinsic size + length before placing it, so the block
+        // gets the right aspect and defaults to the clip's own duration.
+        const probe = document.createElement('video');
+        probe.preload = 'metadata';
+        probe.onloadedmetadata = () => {
+            const totalTime = getTotalTime();
+            const natW = probe.videoWidth || 16;
+            const natH = probe.videoHeight || 9;
+            const vidDur = (isFinite(probe.duration) && probe.duration > 0) ? probe.duration : 5;
+            const desired = Math.min(vidDur, Math.max(1, totalTime || vidDur));
+            const { start, duration } = clampMediaWindow(mediaItems, null, currentTimeRef.current || 0, desired, totalTime);
+            const id = `bigvid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            const height = cropOutputHeight(natW, natH, { x: 0, y: 0, w: 1, h: 1 });
+            const newItem = { id, src, start, duration, videoDuration: vidDur, ...newMediaItemDefaults('video'), height };
+            setMediaItems(prev => [...prev, newItem]);
+            setSelectedMediaId(id);
+        };
+        probe.onerror = () => { /* not a decodable video — ignore */ };
+        probe.src = src;
+    };
+
+    const addFile = (file, dataUrl) => {
+        if (file && file.type && file.type.startsWith('video')) addVideo(dataUrl);
+        else addImage(dataUrl);
+    };
+
     const handleFileUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = (evt) => addImage(evt.target.result);
+        reader.onload = (evt) => addFile(file, evt.target.result);
         reader.readAsDataURL(file);
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
@@ -52,7 +79,7 @@ export const MediaLibrary = () => {
             if (item.kind === 'file') {
                 const blob = item.getAsFile();
                 const reader = new FileReader();
-                reader.onload = (evt) => addImage(evt.target.result);
+                reader.onload = (evt) => addFile(blob, evt.target.result);
                 reader.readAsDataURL(blob);
             }
         }
@@ -122,8 +149,8 @@ export const MediaLibrary = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div className="panel-header">
                 <span className="panel-eyebrow">Scenes</span>
-                <h3 className="panel-title">Big Images</h3>
-                <p className="panel-subtitle">Full-width photos that appear behind the captions — great for showing what you're talking about.</p>
+                <h3 className="panel-title">Big Media</h3>
+                <p className="panel-subtitle">Full-width photos or videos that appear with the captions — great for showing what you're talking about.</p>
             </div>
 
             <div
@@ -136,10 +163,10 @@ export const MediaLibrary = () => {
                     <circle cx="8.5" cy="8.5" r="1.5"></circle>
                     <polyline points="21 15 16 10 5 21"></polyline>
                 </svg>
-                <span>Click to upload,<br />or paste an image (Ctrl+V)</span>
+                <span>Click to upload an image or video,<br />or paste an image (Ctrl+V)</span>
                 <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     ref={fileInputRef}
                     style={{ display: 'none' }}
                     onChange={handleFileUpload}
@@ -148,7 +175,7 @@ export const MediaLibrary = () => {
 
             {sorted.length === 0 ? (
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0', lineHeight: 1.6 }}>
-                    No big images yet.<br />Add one above — it'll drop in at the playhead.
+                    No media yet.<br />Add an image or video above — it'll drop in at the playhead.
                 </p>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -162,7 +189,8 @@ export const MediaLibrary = () => {
                                     onClick={() => setSelectedMediaId(isSelected ? null : item.id)}
                                 >
                                     <div className="comp-thumb">
-                                        <CroppedImage src={item.src} boxW={30} boxH={30} crop={item.crop} />
+                                        <CroppedMedia item={item} boxW={30} boxH={30} />
+                                        {item.type === 'video' && <span className="thumb-video-badge">▶</span>}
                                     </div>
                                     <span className="comp-card-title">
                                         {item.start.toFixed(1)}s – {(item.start + item.duration).toFixed(1)}s

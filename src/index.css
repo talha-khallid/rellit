@@ -1378,6 +1378,18 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
     max-height: 100%;
     object-fit: contain;
 }
+.comp-thumb { position: relative; }
+.thumb-video-badge {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    pointer-events: none;
+}
 .comp-card-title {
     flex: 1;
     font-size: 12px;

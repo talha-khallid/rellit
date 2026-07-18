@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 
 import { EditorContext } from '../context/EditorContext';
 import { getBehaviors, newComponentDefaults } from '../utils/componentStyle';
 import { CroppedImage } from '../components/CroppedImage';
+import { CroppedVideo } from '../components/CroppedMedia';
 import { MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, TEXT_COLUMN_PAD_LEFT, MEDIA_IMAGE_WIDTH, MEDIA_MAX_ZOOM, getMediaGeometry, getActiveMediaItem, sampleKeyframes, mediaViewTransform, mediaLocalProgress, keyframeAt, normalizeKeyframe, newKeyframe, clamp, DEFAULT_VIEW } from '../utils/mediaLayout';
 
 export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
@@ -46,6 +47,9 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     // keyframe pan/zoom animates smoothly (and tracks scrubbing) without React
     // re-rendering the image element on every tick.
     const mediaViewRefs = useRef({});
+    // The underlying <video> element per video item, so playback can be synced to
+    // the timeline clock (play/pause/seek).
+    const mediaVideoRefs = useRef({});
 
     // Always hand the re-measurement the LATEST line durations. lineSettings is
     // intentionally kept out of the measure effect's deps (adding it would loop),
@@ -490,26 +494,52 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         // eslint-disable-next-line
     }, [mediaItems]);
 
+    // Keep a video item's <video> element in sync with the timeline clock: play
+    // while it's on-screen and playing, seek to the exact frame while scrubbing,
+    // and freeze on the last frame if the block outlasts the clip.
+    const syncVideoEl = (v, item, t) => {
+        const active = t >= item.start && t < item.start + item.duration;
+        if (!active) { if (!v.paused) v.pause(); return; }
+        const vidDur = item.videoDuration || v.duration || 0;
+        const rel = t - item.start;
+        const ended = vidDur > 0 && rel >= vidDur;
+        const target = vidDur > 0 ? Math.min(Math.max(rel, 0), vidDur - 0.03) : Math.max(rel, 0);
+        if (isPlaying && !ended) {
+            if (v.paused) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+            if (Math.abs(v.currentTime - target) > 0.25) { try { v.currentTime = target; } catch (e) { /* seek race */ } }
+        } else {
+            if (!v.paused) v.pause();
+            if (Math.abs(v.currentTime - target) > 0.03) { try { v.currentTime = target; } catch (e) { /* seek race */ } }
+        }
+    };
+
     // Drive each big image's keyframe pan/zoom from the shared playback clock,
     // every frame, so it animates during playback and follows the playhead while
-    // scrubbing. Images without keyframes stay at the identity transform.
+    // scrubbing. Images without keyframes stay at the identity transform. Video
+    // items are also kept in playback sync here.
     useEffect(() => {
         let raf;
         const loop = () => {
             const t = currentTimeRef.current;
             for (const item of mediaItems) {
                 const el = mediaViewRefs.current[item.id];
-                if (!el) continue;
-                const view = (item.keyframes && item.keyframes.length)
-                    ? sampleKeyframes(item.keyframes, mediaLocalProgress(item, t))
-                    : DEFAULT_VIEW;
-                el.style.transform = mediaViewTransform(view, MEDIA_IMAGE_WIDTH, item.height);
+                if (el) {
+                    const view = (item.keyframes && item.keyframes.length)
+                        ? sampleKeyframes(item.keyframes, mediaLocalProgress(item, t))
+                        : DEFAULT_VIEW;
+                    el.style.transform = mediaViewTransform(view, MEDIA_IMAGE_WIDTH, item.height);
+                }
+                if (item.type === 'video') {
+                    const v = mediaVideoRefs.current[item.id];
+                    if (v && v.readyState > 0) syncVideoEl(v, item, t);
+                }
             }
             raf = requestAnimationFrame(loop);
         };
         raf = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(raf);
-    }, [mediaItems, currentTimeRef]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mediaItems, isPlaying, currentTimeRef]);
 
     // ---- Direct manipulation of a big image's pan/zoom on the preview --------
     // When a big image is selected and paused, dragging it pans and scrolling
@@ -1276,12 +1306,22 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                             ref={el => { mediaViewRefs.current[item.id] = el; }}
                                             style={{ width: '100%', height: '100%', transformOrigin: '0 0', willChange: 'transform' }}
                                         >
-                                            <CroppedImage
-                                                src={item.src}
-                                                boxW={imgW}
-                                                boxH={item.height}
-                                                crop={item.crop}
-                                            />
+                                            {item.type === 'video' ? (
+                                                <CroppedVideo
+                                                    ref={el => { mediaVideoRefs.current[item.id] = el; }}
+                                                    src={item.src}
+                                                    boxW={imgW}
+                                                    boxH={item.height}
+                                                    crop={item.crop}
+                                                />
+                                            ) : (
+                                                <CroppedImage
+                                                    src={item.src}
+                                                    boxW={imgW}
+                                                    boxH={item.height}
+                                                    crop={item.crop}
+                                                />
+                                            )}
                                         </div>
                                     </div>
                                 </div>

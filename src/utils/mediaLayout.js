@@ -161,8 +161,9 @@ export const cropOutputHeight = (natW, natH, crop, fallback = 760) => {
     return Math.round(MEDIA_IMAGE_WIDTH * (sh / sw));
 };
 
-export const newMediaItemDefaults = () => ({
-    height: 760,                       // derived from the crop once the image loads
+export const newMediaItemDefaults = (type = 'image') => ({
+    type,                              // 'image' | 'video'
+    height: 760,                       // derived from the crop once the media loads
     crop: { ...DEFAULT_CROP },         // normalized [0..1] source rectangle
     borderRadius: 24,                  // rounded corners, adjustable in the editor
     keyframes: []                      // pan/zoom motion inside the container (empty = static)
