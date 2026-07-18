@@ -1,7 +1,7 @@
 import React, { useContext, useRef, useState, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { AudioWaveform } from '../components/AudioWaveform';
-import { clampMediaWindow, keyframeAt, newKeyframe, sampleKeyframes, clamp } from '../utils/mediaLayout';
+import { clampMediaWindow, keyframeAt, newKeyframe, sampleKeyframes, clamp, MEDIA_MIN_GAP_SEC } from '../utils/mediaLayout';
 
 export const Timeline = () => {
     const {
@@ -34,7 +34,10 @@ export const Timeline = () => {
     const [isResizingMedia, setIsResizingMedia] = useState(false);
     const [resizeMediaId, setResizeMediaId] = useState(null);
     const [mediaResizeStartX, setMediaResizeStartX] = useState(0);
-    const [mediaInitialDur, setMediaInitialDur] = useState(0);
+    // 'right' = trim from end (change duration); 'left' = trim from start (move the
+    // in-point, keep the right edge fixed). init holds values captured at grab time.
+    const [mediaResizeMode, setMediaResizeMode] = useState('right');
+    const [mediaResizeInit, setMediaResizeInit] = useState({ start: 0, duration: 0, trimStart: 0 });
 
     // Keyframe diamond: drag-to-retime
     const [isMovingKf, setIsMovingKf] = useState(false);
@@ -239,12 +242,37 @@ export const Timeline = () => {
                     setMediaItems(mediaItems.map(m => m.id === moveMediaId ? { ...m, start, duration } : m));
                 }
             } else if (isResizingMedia) {
-                const deltaTime = (e.clientX - mediaResizeStartX) / timelineScale;
-                const current = mediaItems.find(m => m.id === resizeMediaId);
-                if (current) {
-                    const newDur = Math.max(0.2, mediaInitialDur + deltaTime);
-                    const { start, duration } = clampMediaWindow(mediaItems, resizeMediaId, current.start, newDur, totalTime);
-                    setMediaItems(mediaItems.map(m => m.id === resizeMediaId ? { ...m, start, duration } : m));
+                const item = mediaItems.find(m => m.id === resizeMediaId);
+                if (item) {
+                    const dt = (e.clientX - mediaResizeStartX) / timelineScale;
+                    const init = mediaResizeInit;
+                    const isVideo = item.type === 'video';
+                    const vidDur = item.videoDuration || 0;
+                    const others = mediaItems.filter(m => m.id !== resizeMediaId);
+
+                    if (mediaResizeMode === 'right') {
+                        // Trim from END: start & in-point fixed, only the length changes.
+                        let rightLimit = totalTime != null ? totalTime : Infinity;
+                        for (const o of others) if (o.start >= init.start) rightLimit = Math.min(rightLimit, o.start - MEDIA_MIN_GAP_SEC);
+                        let newDur = init.duration + dt;
+                        // A video can't play past the end of its source.
+                        if (isVideo && vidDur > 0) newDur = Math.min(newDur, vidDur - (init.trimStart || 0));
+                        newDur = Math.max(0.2, Math.min(newDur, rightLimit - init.start));
+                        setMediaItems(mediaItems.map(m => m.id === resizeMediaId ? { ...m, start: init.start, duration: newDur } : m));
+                    } else {
+                        // Trim from START: the right edge stays put; the in-point (and the
+                        // block's timeline start) move together.
+                        const rightEdge = init.start + init.duration;
+                        let leftLimit = 0;
+                        for (const o of others) { const oEnd = o.start + o.duration; if (oEnd <= init.start + 1e-6) leftLimit = Math.max(leftLimit, oEnd + MEDIA_MIN_GAP_SEC); }
+                        let minStart = leftLimit;
+                        // A video can't reveal earlier than its source start (trimStart >= 0).
+                        if (isVideo) minStart = Math.max(minStart, init.start - (init.trimStart || 0));
+                        const newStart = Math.max(minStart, Math.min(init.start + dt, rightEdge - 0.2));
+                        const patch = { start: newStart, duration: rightEdge - newStart };
+                        if (isVideo) patch.trimStart = Math.max(0, (init.trimStart || 0) + (newStart - init.start));
+                        setMediaItems(mediaItems.map(m => m.id === resizeMediaId ? { ...m, ...patch } : m));
+                    }
                 }
             } else if (isMovingKf) {
                 const item = mediaItems.find(m => m.id === moveKfItemId);
@@ -281,7 +309,7 @@ export const Timeline = () => {
     }, [
         isResizing, isDraggingPlayhead, startX, initialDur, timelineScale, resizeLineIdx, lineSettings, visualLines, segments,
         isMovingMedia, moveMediaId, moveStartX, moveOrigStart,
-        isResizingMedia, resizeMediaId, mediaResizeStartX, mediaInitialDur,
+        isResizingMedia, resizeMediaId, mediaResizeStartX, mediaResizeMode, mediaResizeInit,
         isMovingKf, moveKfItemId, moveKfId, kfMoveStartX, kfMoveStartT,
         mediaItems, totalTime
     ]);
@@ -525,6 +553,7 @@ export const Timeline = () => {
                                     style={{ left: item.start * timelineScale, width: Math.max(4, item.duration * timelineScale), top: 0, height: '100%' }}
                                     onMouseDown={(e) => {
                                         if (e.target.closest('.resize-handle-right')) return;
+                                        if (e.target.closest('.resize-handle-left')) return;
                                         if (e.target.closest('.kf-diamond')) return;
                                         if (isPlaying) togglePlayback();
                                         setSelectedMediaId(item.id);
@@ -559,14 +588,34 @@ export const Timeline = () => {
                                         />
                                     ))}
 
+                                    {/* Videos can be trimmed from the start too (in-point). */}
+                                    {item.type === 'video' && (
+                                        <div
+                                            className="resize-handle-left"
+                                            title="Trim from start"
+                                            onMouseDown={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedMediaId(item.id);
+                                                setIsResizingMedia(true);
+                                                setResizeMediaId(item.id);
+                                                setMediaResizeMode('left');
+                                                setMediaResizeStartX(e.clientX);
+                                                setMediaResizeInit({ start: item.start, duration: item.duration, trimStart: item.trimStart || 0 });
+                                                if (isPlaying) togglePlayback();
+                                            }}
+                                        />
+                                    )}
                                     <div
                                         className="resize-handle-right"
+                                        title={item.type === 'video' ? 'Trim from end' : 'Resize'}
                                         onMouseDown={(e) => {
                                             e.stopPropagation();
+                                            setSelectedMediaId(item.id);
                                             setIsResizingMedia(true);
                                             setResizeMediaId(item.id);
+                                            setMediaResizeMode('right');
                                             setMediaResizeStartX(e.clientX);
-                                            setMediaInitialDur(item.duration);
+                                            setMediaResizeInit({ start: item.start, duration: item.duration, trimStart: item.trimStart || 0 });
                                             if (isPlaying) togglePlayback();
                                         }}
                                     />

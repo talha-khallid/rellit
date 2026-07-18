@@ -519,6 +519,21 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .media-block .resize-handle-right { background: rgba(0, 0, 0, 0.18); border-left: 1px solid rgba(0, 0, 0, 0.35); }
 
+/* Left trim handle (videos): mirror of the right handle */
+.resize-handle-left {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 10px;
+    height: 100%;
+    cursor: col-resize;
+    background: rgba(0, 0, 0, 0.18);
+    border-right: 1px solid rgba(0, 0, 0, 0.35);
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+    z-index: 5;
+}
+.media-block .resize-handle-right { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+
 /* --- Playhead --- */
 .playhead {
     position: absolute;
