@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { loadProject, saveProjectData, updateProjectName } from '../utils/storage';
+import { decodeStoredAudio } from '../utils/audioData';
 
 export const EditorContext = createContext();
 
@@ -119,7 +120,34 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
             setProjectName(project.name || 'Untitled Project');
 
             const data = project.data || {};
-            setSegments(data.segments || []);
+            // Drop any invalid audioBuffer left by older saves (an AudioBuffer that
+            // was JSON-serialized to `{}`); the real buffer is re-decoded from
+            // audioData below.
+            const loadedSegments = (data.segments || []).map(seg => {
+                if (seg.audioBuffer && typeof seg.audioBuffer.getChannelData !== 'function') {
+                    const { audioBuffer: _bad, ...rest } = seg;
+                    return rest;
+                }
+                return seg;
+            });
+            setSegments(loadedSegments);
+            // Re-decode any persisted audio (stored as base64) back into
+            // AudioBuffers, then patch it into the segments as they arrive.
+            loadedSegments.forEach((seg, idx) => {
+                if (seg.audioData && !seg.audioBuffer) {
+                    decodeStoredAudio(getAudioCtx(), seg.audioData)
+                        .then(buffer => {
+                            if (cancelled) return;
+                            setSegments(prev => {
+                                if (!prev[idx] || prev[idx].audioData !== seg.audioData) return prev;
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], audioBuffer: buffer };
+                                return next;
+                            });
+                        })
+                        .catch(err => console.error('Failed to decode stored audio', err));
+                }
+            });
             setVideoBgColor(data.videoBgColor || '#050505');
             setVideoAlignPercent(data.videoAlignPercent ?? 50);
             setFontFamily(data.fontFamily || 'Inter, sans-serif');
@@ -164,7 +192,10 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
 
         const saveTimer = setTimeout(() => {
             saveProjectData(projectId, {
-                segments,
+                // AudioBuffers can't be JSON-serialized (they become `{}` and then
+                // crash on reload); drop them and persist the base64 `audioData`
+                // instead, which is re-decoded on load.
+                segments: segments.map(({ audioBuffer: _audioBuffer, ...rest }) => rest),
                 videoBgColor,
                 videoAlignPercent,
                 fontFamily,

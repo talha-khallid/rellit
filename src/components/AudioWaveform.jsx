@@ -4,7 +4,10 @@ export const AudioWaveform = ({ audioBuffer, width, height = 40 }) => {
     const canvasRef = useRef(null);
 
     useLayoutEffect(() => {
-        if (!canvasRef.current || !audioBuffer || width <= 0) return;
+        // audioBuffer may be a not-yet-decoded placeholder (e.g. right after a
+        // project load, before its stored audio is turned back into an AudioBuffer),
+        // so guard against calling AudioBuffer methods on a non-AudioBuffer.
+        if (!canvasRef.current || !audioBuffer || typeof audioBuffer.getChannelData !== 'function' || width <= 0) return;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
 

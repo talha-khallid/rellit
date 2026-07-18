@@ -3,14 +3,15 @@ import { EditorContext } from '../context/EditorContext';
 import { CustomColorPicker } from '../components/CustomColorPicker';
 import { ComponentCreator } from '../components/ComponentCreator';
 import { MediaLibrary } from '../components/MediaLibrary';
+import { arrayBufferToBase64 } from '../utils/audioData';
 
 // --- Dynamic Waveform Component ---
 const Waveform = ({ audioBuffer }) => {
     const [peaks, setPeaks] = useState([]);
 
     useEffect(() => {
-        if (!audioBuffer) return;
-        
+        if (!audioBuffer || typeof audioBuffer.getChannelData !== 'function') return;
+
         try {
             const channelData = audioBuffer.getChannelData(0);
             const numPeaks = 50; 
@@ -136,7 +137,8 @@ export const SidebarLeft = () => {
     const [newDuration, setNewDuration] = useState('05');
     const [newAudioFile, setNewAudioFile] = useState(null);
     const [newAudioBuffer, setNewAudioBuffer] = useState(null);
-    
+    const [newAudioData, setNewAudioData] = useState(null);
+
     const fileInputRef = useRef(null);
 
     // Format duration string to clean '05' or '10.5' string
@@ -166,8 +168,9 @@ export const SidebarLeft = () => {
 
         const arrayBuffer = await file.arrayBuffer();
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+        const decoded = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
         setNewAudioBuffer(decoded);
+        setNewAudioData(arrayBufferToBase64(arrayBuffer));
     };
 
     // Handle Inline Segment Audio Upload
@@ -184,12 +187,16 @@ export const SidebarLeft = () => {
 
         const arrayBuffer = await file.arrayBuffer();
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+        const decoded = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
 
         const updated = [...segments];
-        updated[index].audioBuffer = decoded;
-        updated[index].audioDuration = tempAudio.duration;
-        updated[index].duration = tempAudio.duration;
+        updated[index] = {
+            ...updated[index],
+            audioBuffer: decoded,
+            audioData: arrayBufferToBase64(arrayBuffer),
+            audioDuration: tempAudio.duration,
+            duration: tempAudio.duration
+        };
         setSegments(updated);
         setCurrentlyPlayingSegIdx(-1);
     };
@@ -203,6 +210,7 @@ export const SidebarLeft = () => {
             text: newText,
             duration: segDuration,
             audioBuffer: newAudioBuffer,
+            audioData: newAudioData,
             audioDuration: newAudioBuffer ? segDuration : null
         }]);
 
@@ -210,6 +218,7 @@ export const SidebarLeft = () => {
         setNewText('');
         setNewAudioFile(null);
         setNewAudioBuffer(null);
+        setNewAudioData(null);
         setNewDuration('05');
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
