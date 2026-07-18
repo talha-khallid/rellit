@@ -22,7 +22,10 @@ export const AppLayout = () => {
                 const tag = e.target.tagName.toLowerCase();
                 // If user is typing in an input or textarea, let them type spaces
                 if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
-                
+                // A modal (crop/trim/export) is open — let it own the keyboard so
+                // Space controls the popup's own video, not the main preview.
+                if (document.querySelector('.export-modal-overlay')) return;
+
                 e.preventDefault(); // Prevent default browser scrolling
                 togglePlayback();
             }

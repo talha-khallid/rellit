@@ -852,6 +852,33 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 .crop-modal {
     width: 380px;
 }
+.media-edit-modal { width: 560px; max-width: 92vw; }
+
+/* Crop / Trim tab switcher inside the media popup */
+.crop-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    margin-bottom: 16px;
+}
+.crop-tab {
+    flex: 1;
+    padding: 7px 0;
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.crop-tab:hover { color: #fff; }
+.crop-tab.active { background: var(--accent); color: #fff; }
 .crop-stage-wrap {
     display: flex;
     justify-content: center;
@@ -1045,19 +1072,6 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .trim-fields { display: flex; gap: 10px; margin-bottom: 4px; }
 .trim-fields .field { flex: 1; }
-.trim-audio-toggle,
-.media-audio-toggle {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 12px;
-    color: var(--text-dim);
-    cursor: pointer;
-    user-select: none;
-}
-.media-audio-toggle { padding: 2px 0; }
-.trim-audio-toggle input,
-.media-audio-toggle input { width: 14px; height: 14px; cursor: pointer; accent-color: var(--accent); }
 
 .export-progress-view {
     display: flex;
@@ -2016,3 +2030,55 @@ button.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
     0% { transform: scale(0.8) rotate(0deg); opacity: 0.5; filter: grayscale(100%); }
     100% { transform: scale(1) rotate(-30deg); opacity: 1; filter: grayscale(0%); }
 }
+
+/* Designed on/off switch (video-audio toggle). Placed last and made specific
+   enough to beat the aggressive global `label` / `.sidebar label` rules, since
+   the row itself is a <label>. */
+label.switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0;
+    padding: 2px 0;
+    text-transform: none;
+    letter-spacing: normal;
+    cursor: pointer;
+    user-select: none;
+}
+.switch-row .switch-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--text-dim);
+}
+.switch-row .switch { position: relative; width: 38px; height: 22px; flex-shrink: 0; margin: 0; }
+.switch-row .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+.switch-row .switch-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    transition: background 0.18s ease, border-color 0.18s ease;
+}
+.switch-row .switch-slider::before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 2px;
+    top: 2px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    transition: transform 0.18s ease;
+}
+.switch-row .switch input:checked + .switch-slider { background: var(--accent); border-color: var(--accent); }
+.switch-row .switch input:checked + .switch-slider::before { transform: translateX(16px); }
+.switch-row .switch input:focus-visible + .switch-slider { box-shadow: 0 0 0 3px var(--accent-soft); }

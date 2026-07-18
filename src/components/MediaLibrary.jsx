@@ -2,7 +2,6 @@ import React, { useContext, useRef } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { CroppedMedia } from './CroppedMedia';
 import { MediaCropModal } from './MediaCropModal';
-import { MediaTrimModal } from './MediaTrimModal';
 import { clampMediaWindow, newMediaItemDefaults, cropOutputHeight, keyframeAt, newKeyframe, normalizeKeyframe, sampleKeyframes, clamp, MEDIA_MAX_ZOOM } from '../utils/mediaLayout';
 
 export const MediaLibrary = () => {
@@ -103,19 +102,20 @@ export const MediaLibrary = () => {
         setMediaItems(mediaItems.map(m => m.id === id ? { ...m, start, duration } : m));
     };
 
-    // Trim popup changes: trimStart/audioEnabled are plain, but a duration change
-    // must be re-fit against the other items on the timeline.
-    const updateTrim = (id, patch) => {
-        setMediaItems(prev => prev.map(m => {
-            if (m.id !== id) return m;
-            const merged = { ...m, ...patch };
-            if ('duration' in patch) {
+    // Edits from the media popup. A duration change (trim) must be re-fit against
+    // the other items on the timeline; everything else is a plain merge.
+    const onEditChange = (id, patch) => {
+        if ('duration' in patch) {
+            setMediaItems(prev => prev.map(m => {
+                if (m.id !== id) return m;
+                const merged = { ...m, ...patch };
                 const totalTime = getTotalTime();
                 const { start, duration } = clampMediaWindow(prev, id, merged.start, merged.duration, totalTime);
                 return { ...merged, start, duration };
-            }
-            return merged;
-        }));
+            }));
+        } else {
+            updateItem(id, patch);
+        }
     };
 
     const handleDelete = (id) => {
@@ -167,8 +167,10 @@ export const MediaLibrary = () => {
     };
 
     const sorted = [...mediaItems].sort((a, b) => a.start - b.start);
-    const cropItem = cropModalMediaId ? mediaItems.find(m => m.id === cropModalMediaId) : null;
-    const trimItem = trimModalMediaId ? mediaItems.find(m => m.id === trimModalMediaId && m.type === 'video') : null;
+    // One popup, opened on the Crop or Trim tab depending on which trigger fired.
+    const editId = trimModalMediaId || cropModalMediaId;
+    const editItem = editId ? mediaItems.find(m => m.id === editId) : null;
+    const closeEdit = () => { setCropModalMediaId(null); setTrimModalMediaId(null); };
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -252,23 +254,28 @@ export const MediaLibrary = () => {
                                             </div>
                                         </div>
                                         <button className="btn-ghost" style={{ height: 34, width: '100%' }} onClick={() => setCropModalMediaId(item.id)}>
-                                            Crop &amp; style
+                                            {item.type === 'video' ? 'Crop & trim' : 'Crop & style'}
                                         </button>
 
                                         {item.type === 'video' && (
-                                            <>
-                                                <button className="btn-ghost" style={{ height: 34, width: '100%' }} onClick={() => setTrimModalMediaId(item.id)}>
-                                                    Trim video
-                                                </button>
-                                                <label className="media-audio-toggle">
+                                            <label className="switch-row">
+                                                <span className="switch-label">
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M11 5 6 9H2v6h4l5 4z"></path>
+                                                        <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
+                                                        <path d="M19 5a10 10 0 0 1 0 14"></path>
+                                                    </svg>
+                                                    Video audio
+                                                </span>
+                                                <span className="switch">
                                                     <input
                                                         type="checkbox"
                                                         checked={!!item.audioEnabled}
                                                         onChange={e => updateItem(item.id, { audioEnabled: e.target.checked })}
                                                     />
-                                                    Play video audio
-                                                </label>
-                                            </>
+                                                    <span className="switch-slider"></span>
+                                                </span>
+                                            </label>
                                         )}
 
                                         {/* Motion (pan/zoom keyframes) */}
@@ -341,20 +348,13 @@ export const MediaLibrary = () => {
                 </div>
             )}
 
-            {cropItem && (
+            {editItem && (
                 <MediaCropModal
-                    item={cropItem}
-                    onChange={(patch) => updateItem(cropItem.id, patch)}
-                    onClose={() => setCropModalMediaId(null)}
-                />
-            )}
-
-            {trimItem && (
-                <MediaTrimModal
-                    item={trimItem}
+                    item={editItem}
                     editingDuration={getTotalTime()}
-                    onChange={(patch) => updateTrim(trimItem.id, patch)}
-                    onClose={() => setTrimModalMediaId(null)}
+                    initialTab={trimModalMediaId ? 'trim' : 'crop'}
+                    onChange={(patch) => onEditChange(editItem.id, patch)}
+                    onClose={closeEdit}
                 />
             )}
         </div>
