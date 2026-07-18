@@ -105,6 +105,9 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
     // Which big image (if any) is on-screen right now, kept in sync by
     // Preview's playback tick / seek handling so Timeline can also read it.
     const [activeMediaId, setActiveMediaId] = useState(null);
+    // Which big image's crop/edit popup is open (null = closed). Lifted here so
+    // both MediaLibrary and the Timeline (double-click) can open it.
+    const [cropModalMediaId, setCropModalMediaId] = useState(null);
 
     // Load project from the SQLite-backed API
     useEffect(() => {
@@ -164,6 +167,7 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
             setMediaItems(data.mediaItems || []);
             setSelectedMediaId(null);
             setActiveMediaId(null);
+            setCropModalMediaId(null);
         });
 
         return () => { cancelled = true; };
@@ -348,6 +352,7 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
         mediaItems, setMediaItems,
         selectedMediaId, setSelectedMediaId,
         activeMediaId, setActiveMediaId,
+        cropModalMediaId, setCropModalMediaId,
         saveStatus,
         onGoHome
     };

@@ -1,4 +1,4 @@
-import React, { useContext, useRef, useState } from 'react';
+import React, { useContext, useRef } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { CroppedImage } from './CroppedImage';
 import { MediaCropModal } from './MediaCropModal';
@@ -8,12 +8,12 @@ export const MediaLibrary = () => {
     const {
         mediaItems, setMediaItems,
         selectedMediaId, setSelectedMediaId,
+        cropModalMediaId, setCropModalMediaId,
         visualLines, lineSettings,
         currentTimeRef
     } = useContext(EditorContext);
 
     const fileInputRef = useRef(null);
-    const [cropModalId, setCropModalId] = useState(null);
 
     const getTotalTime = () => visualLines.reduce((acc, _, i) => acc + parseFloat(lineSettings[i]?.duration || 0.1), 0);
 
@@ -70,11 +70,11 @@ export const MediaLibrary = () => {
     const handleDelete = (id) => {
         setMediaItems(mediaItems.filter(m => m.id !== id));
         if (selectedMediaId === id) setSelectedMediaId(null);
-        if (cropModalId === id) setCropModalId(null);
+        if (cropModalMediaId === id) setCropModalMediaId(null);
     };
 
     const sorted = [...mediaItems].sort((a, b) => a.start - b.start);
-    const cropItem = cropModalId ? mediaItems.find(m => m.id === cropModalId) : null;
+    const cropItem = cropModalMediaId ? mediaItems.find(m => m.id === cropModalMediaId) : null;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -151,7 +151,7 @@ export const MediaLibrary = () => {
                                                 />
                                             </div>
                                         </div>
-                                        <button className="btn-ghost" style={{ height: 34, width: '100%' }} onClick={() => setCropModalId(item.id)}>
+                                        <button className="btn-ghost" style={{ height: 34, width: '100%' }} onClick={() => setCropModalMediaId(item.id)}>
                                             Crop & style image
                                         </button>
                                     </div>
@@ -166,7 +166,7 @@ export const MediaLibrary = () => {
                 <MediaCropModal
                     item={cropItem}
                     onChange={(patch) => updateItem(cropItem.id, patch)}
-                    onClose={() => setCropModalId(null)}
+                    onClose={() => setCropModalMediaId(null)}
                 />
             )}
         </div>

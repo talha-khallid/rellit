@@ -65,6 +65,13 @@ export const MediaCropModal = ({ item, onChange, onClose }) => {
         };
     }, [dragging, stageW, stageH, commit]);
 
+    // Close on Escape while the popup is open.
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
     const startDrag = (mode) => (e) => {
         e.preventDefault();
         e.stopPropagation();

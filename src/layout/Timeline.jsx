@@ -14,7 +14,8 @@ export const Timeline = () => {
         mediaItems, setMediaItems,
         selectedMediaId, setSelectedMediaId,
         activeMediaId,
-        setActiveTab
+        setActiveTab,
+        cropModalMediaId, setCropModalMediaId
     } = useContext(EditorContext);
 
     const [isResizing, setIsResizing] = useState(false);
@@ -234,6 +235,59 @@ export const Timeline = () => {
         isResizingMedia, resizeMediaId, mediaResizeStartX, mediaInitialDur,
         mediaItems, totalTime
     ]);
+    // Keyboard shortcuts for the currently selected big image.
+    //   Delete / Backspace → remove it
+    //   Enter              → open its crop / edit popup
+    //   ← / →              → nudge start by 0.1s (hold Shift for 1s)
+    //   Ctrl / Cmd + D     → duplicate it right after itself
+    //   Escape             → deselect
+    useEffect(() => {
+        const isTyping = (el) => {
+            if (!el) return false;
+            const tag = el.tagName;
+            return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+        };
+
+        const handleKeyDown = (e) => {
+            // Don't hijack keys while typing in a field or the caption editor,
+            // and let the crop popup own the keyboard while it's open.
+            if (isTyping(document.activeElement)) return;
+            if (cropModalMediaId) return;
+            if (!selectedMediaId) return;
+            const item = mediaItems.find(m => m.id === selectedMediaId);
+            if (!item) return;
+
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                setMediaItems(mediaItems.filter(m => m.id !== selectedMediaId));
+                setSelectedMediaId(null);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                setActiveTab('bigMedia');
+                setCropModalMediaId(selectedMediaId);
+            } else if (e.key === 'Escape') {
+                setSelectedMediaId(null);
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                const dir = e.key === 'ArrowLeft' ? -1 : 1;
+                const step = (e.shiftKey ? 1 : 0.1) * dir;
+                const desiredStart = Math.max(0, item.start + step);
+                const { start, duration } = clampMediaWindow(mediaItems, selectedMediaId, desiredStart, item.duration, totalTime);
+                setMediaItems(mediaItems.map(m => m.id === selectedMediaId ? { ...m, start, duration } : m));
+            } else if ((e.key === 'd' || e.key === 'D') && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                const newId = `bigimg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                const desiredStart = item.start + item.duration;
+                const { start, duration } = clampMediaWindow(mediaItems, null, desiredStart, item.duration, totalTime);
+                setMediaItems([...mediaItems, { ...item, id: newId, start, duration }]);
+                setSelectedMediaId(newId);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedMediaId, cropModalMediaId, mediaItems, totalTime, setMediaItems, setSelectedMediaId, setActiveTab, setCropModalMediaId]);
+
     useEffect(() => {
         const area = scrollAreaRef.current;
         if (!area) return;
@@ -390,6 +444,7 @@ export const Timeline = () => {
                                 <div
                                     key={item.id}
                                     className={`timeline-block media-block ${activeMediaId === item.id ? 'active' : ''} ${selectedMediaId === item.id ? 'selected' : ''}`}
+                                    title="Double-click to edit · Delete to remove · ←/→ to nudge"
                                     style={{ left: item.start * timelineScale, width: Math.max(4, item.duration * timelineScale), top: 0, height: '100%' }}
                                     onMouseDown={(e) => {
                                         if (e.target.closest('.resize-handle-right')) return;
@@ -401,6 +456,12 @@ export const Timeline = () => {
                                         setMoveStartX(e.clientX);
                                         setMoveOrigStart(item.start);
                                         e.stopPropagation();
+                                    }}
+                                    onDoubleClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedMediaId(item.id);
+                                        setActiveTab('bigMedia');
+                                        setCropModalMediaId(item.id);
                                     }}
                                 >
                                     <img src={item.src} alt="" className="media-block-thumb" />
