@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { getBehaviors, newComponentDefaults } from '../utils/componentStyle';
+import { getEditedBuffer } from '../utils/audioData';
 import { MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_WIDTH, MEDIA_MAX_ZOOM, getMediaLayout, getActiveMediaItem, sampleKeyframes, mediaElementBox, mediaLocalProgress, keyframeAt, normalizeKeyframe, newKeyframe, clamp, defaultView, normalizeCrop, minViewScale } from '../utils/mediaLayout';
 
 export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
@@ -378,7 +379,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
             if (seg && seg.audioBuffer) {
                 const offsetTime = currentTimeRef.current - absoluteSegmentStart;
                 const audioCtx = getAudioCtx();
-                const player = new AudioBufferPlayer(audioCtx, seg.audioBuffer);
+                const player = new AudioBufferPlayer(audioCtx, getEditedBuffer(audioCtx, seg.audioBuffer, seg.audioEdit));
                 player.play(Math.max(0, offsetTime));
                 currentAudioRef.current = player;
                 setGlobalAudioObj(player);
@@ -453,7 +454,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                             }
                             if (seg && seg.audioBuffer) {
                                 const audioCtx = getAudioCtx();
-                                const player = new AudioBufferPlayer(audioCtx, seg.audioBuffer);
+                                const player = new AudioBufferPlayer(audioCtx, getEditedBuffer(audioCtx, seg.audioBuffer, seg.audioEdit));
                                 player.play(0); // starting exactly at the segment boundary
                                 currentAudioRef.current = player;
                                 setGlobalAudioObj(player);

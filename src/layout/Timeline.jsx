@@ -1,6 +1,7 @@
 import React, { useContext, useRef, useState, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { AudioWaveform } from '../components/AudioWaveform';
+import { AudioTrimModal } from '../components/AudioTrimModal';
 import { clampMediaWindow, keyframeAt, newKeyframe, sampleKeyframes, clamp, MEDIA_MIN_GAP_SEC, MEDIA_TRANSITION_TYPES, getItemTransition } from '../utils/mediaLayout';
 
 export const Timeline = () => {
@@ -49,6 +50,8 @@ export const Timeline = () => {
     const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
     // Transition editor popup: which incoming item + where to anchor the panel.
     const [transitionPopup, setTransitionPopup] = useState(null); // { itemId, x, y }
+    // Audio trim/cut modal: which segment is open (or null).
+    const [audioModalSegIdx, setAudioModalSegIdx] = useState(null);
     const scrollAreaRef = useRef(null);
     const timelineContentRef = useRef(null);
     const playheadRef = useRef(null);
@@ -589,8 +592,15 @@ export const Timeline = () => {
                         <div className="track audio-track" data-label="Audio">
                             {audioBlocks.map(ab => {
                                 const blockWidth = Math.max(1, ab.duration * timelineScale - 1);
+                                const trimmed = segments[ab.index]?.audioEdit && (segments[ab.index].audioEdit.cuts?.length || (segments[ab.index].audioEdit.start ?? 0) > 0.01 || (segments[ab.index].audioEdit.end ?? ab.audioBuffer?.duration) < (ab.audioBuffer?.duration ?? 0) - 0.01);
                                 return (
-                                    <div key={ab.index} className="timeline-block audio-block" style={{ left: ab.start * timelineScale, width: blockWidth, top: 0, padding: 0, height: '100%' }}>
+                                    <div
+                                        key={ab.index}
+                                        className={`timeline-block audio-block ${trimmed ? 'edited' : ''}`}
+                                        style={{ left: ab.start * timelineScale, width: blockWidth, top: 0, padding: 0, height: '100%' }}
+                                        title="Double-click to trim / cut this audio"
+                                        onDoubleClick={(e) => { e.stopPropagation(); if (isPlaying) togglePlayback(); setAudioModalSegIdx(ab.index); }}
+                                    >
                                         <AudioWaveform
                                             audioBuffer={ab.audioBuffer}
                                             width={blockWidth}
@@ -707,6 +717,10 @@ export const Timeline = () => {
                     </div>
                 </div>
             </div>
+
+            {audioModalSegIdx !== null && (
+                <AudioTrimModal segIdx={audioModalSegIdx} onClose={() => setAudioModalSegIdx(null)} />
+            )}
 
             {transitionPopup && popupTr && (
                 <div

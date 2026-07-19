@@ -1,5 +1,6 @@
 import * as Mp4Muxer from 'mp4-muxer';
 import { hexToRgb } from './colorUtils';
+import { getEditedBuffer } from './audioData';
 import { getMediaLayout, composeCropView, sampleKeyframes, mediaLocalProgress, clamp, MEDIA_IMAGE_RADIUS } from './mediaLayout';
 
 // Seek a <video> to a time and resolve once the frame is ready to draw. Has a
@@ -138,11 +139,20 @@ export async function exportVideo({
         let audioEncoder = null;
 
         if (includeAudio) {
+            // Apply each segment's non-destructive audio edit (trim/cut) so the
+            // export carries the spliced audio, matching the live preview.
+            let editCtx = null;
             for (let i = 0; i < segments.length; i++) {
                 if (segments[i].audioBuffer) {
-                    segmentAudioData[i] = segments[i].audioBuffer;
+                    let buf = segments[i].audioBuffer;
+                    if (segments[i].audioEdit) {
+                        if (!editCtx) editCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        buf = getEditedBuffer(editCtx, buf, segments[i].audioEdit);
+                    }
+                    segmentAudioData[i] = buf;
                 }
             }
+            if (editCtx) { try { await editCtx.close(); } catch (e) { /* ignore */ } }
             muxerOptions.audio = { codec: muxerAudioCodec, sampleRate: EXPORT_SAMPLE_RATE, numberOfChannels: 2 };
         }
 
