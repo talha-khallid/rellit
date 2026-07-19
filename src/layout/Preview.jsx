@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { getBehaviors, newComponentDefaults } from '../utils/componentStyle';
-import { MEDIA_EASE_CSS, MEDIA_TRANSITION_MS, MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_GAP, MEDIA_IMAGE_WIDTH, MEDIA_MAX_ZOOM, getMediaGeometry, getActiveMediaItem, sampleKeyframes, mediaElementBox, mediaLocalProgress, keyframeAt, normalizeKeyframe, newKeyframe, clamp, defaultView, normalizeCrop, minViewScale } from '../utils/mediaLayout';
+import { MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_WIDTH, MEDIA_MAX_ZOOM, getMediaLayout, getActiveMediaItem, sampleKeyframes, mediaElementBox, mediaLocalProgress, keyframeAt, normalizeKeyframe, newKeyframe, clamp, defaultView, normalizeCrop, minViewScale } from '../utils/mediaLayout';
 
 export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const { 
@@ -48,6 +48,13 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const mediaElRefs = useRef({});
     // Video elements (same node as above for video items), for playback sync.
     const mediaVideoRefs = useRef({});
+    // The outer media-box (per item), its inner window, and the single flow slot
+    // that holds them. Their size / opacity / z are driven per-frame from
+    // getMediaLayout so adjacent items convert into one another in a shared,
+    // morphing frame instead of stacking or ghost-blending.
+    const mediaBoxRefs = useRef({});
+    const mediaWindowRefs = useRef({});
+    const mediaSlotRef = useRef(null);
 
     // Always hand the re-measurement the LATEST line durations. lineSettings is
     // intentionally kept out of the measure effect's deps (adding it would loop),
@@ -524,15 +531,47 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         let raf;
         const loop = () => {
             const t = currentTimeRef.current;
+
+            // Shared caption + media geometry (same math the export uses). Drive the
+            // caption band height, the single media slot (which shifts the caption up
+            // via the flex column), and each media box's cross-fade per-frame.
+            const layout = getMediaLayout(mediaItems, t, fontSize, videoAlignPercent);
+            if (scrollContainerRef.current) scrollContainerRef.current.style.height = layout.captionHeight + 'px';
+            if (mediaSlotRef.current) {
+                mediaSlotRef.current.style.height = layout.slotHeight + 'px';
+                mediaSlotRef.current.style.marginTop = (layout.slotHeight > 0 ? layout.gap : 0) + 'px';
+            }
+            const layoutById = {};
+            for (const im of layout.images) layoutById[im.item.id] = im;
+
             for (const item of mediaItems) {
+                const im = layoutById[item.id];
+                const box = mediaBoxRefs.current[item.id];
+                if (box) {
+                    if (im) {
+                        box.style.width = im.clipW + 'px';
+                        box.style.height = im.clipH + 'px';
+                        box.style.opacity = im.opacity;
+                        box.style.zIndex = im.z;
+                    } else {
+                        box.style.opacity = 0;
+                        box.style.width = '0px';
+                        box.style.height = '0px';
+                    }
+                }
+                // The inner window (which the raw element fills) is sized to boxW×boxH
+                // and centred; it COVERS the clip frame at the media's own aspect, and
+                // the box's overflow:hidden crops the overflow (no stretching).
+                const bw = im ? im.boxW : (item.width || MEDIA_IMAGE_WIDTH);
+                const bh = im ? im.boxH : item.height;
+                const win = mediaWindowRefs.current[item.id];
+                if (win) { win.style.width = bw + 'px'; win.style.height = bh + 'px'; }
                 const el = mediaElRefs.current[item.id];
                 if (el) {
-                    const boxW = item.width || MEDIA_IMAGE_WIDTH;
-                    const boxH = item.height;
                     const view = (item.keyframes && item.keyframes.length)
                         ? sampleKeyframes(item.keyframes, mediaLocalProgress(item, t), item.crop)
                         : defaultView(item.crop);
-                    const b = mediaElementBox(item.crop, view, boxW, boxH);
+                    const b = mediaElementBox(item.crop, view, bw, bh);
                     el.style.width = b.width + 'px';
                     el.style.height = b.height + 'px';
                     el.style.left = b.left + 'px';
@@ -548,7 +587,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         raf = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(raf);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mediaItems, isPlaying, currentTimeRef]);
+    }, [mediaItems, isPlaying, fontSize, videoAlignPercent, currentTimeRef]);
 
     // ---- Direct manipulation of a big image's pan/zoom on the preview --------
     // When a big image is selected and paused, dragging it pans and scrolling
@@ -876,13 +915,9 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         return () => document.removeEventListener('selectionchange', handleSelection);
     }, [isPlaying, currentSelectionCharIds, setCurrentSelectionCharIds]);
 
-    // Caption + big-image geometry. At rest (no active image) the caption sits at
-    // videoAlignPercent, expanded. When an image is active the whole group
-    // [image | gap | compact caption] is centered on screen. We compute the two
-    // endpoints and let CSS transitions interpolate; the export engine computes
-    // the SAME geometry per frame (getMediaGeometry) so they stay identical.
-    const activeMediaItem = mediaItems.find(m => m.id === activeMediaId) || null;
-    const captionGeo = getMediaGeometry(activeMediaItem, activeMediaItem ? 1 : 0, fontSize, videoAlignPercent);
+    // Caption band height, the media slot's height, and each media item's
+    // cross-fade are all driven per-frame by the media rAF loop above (from the
+    // shared getMediaLayout), so the preview matches the export frame-for-frame.
 
     let selectionHasUniformOverride = false;
     if (currentSelectionCharIds.length > 0) {
@@ -1011,8 +1046,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                 ref={scrollContainerRef}
                                 style={{
                                     width: '100%',
-                                    height: captionGeo.captionHeight,
-                                    transition: `height ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`,
+                                    // height is driven per-frame by the media rAF loop (getMediaLayout)
                                     overflow: 'hidden', position: 'relative',
                                     WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 15%, rgba(0,0,0,1) 40%, rgba(0,0,0,1) 60%, rgba(0,0,0,0.25) 85%, rgba(0,0,0,0) 100%)',
                                     maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 15%, rgba(0,0,0,1) 40%, rgba(0,0,0,1) 60%, rgba(0,0,0,0.25) 85%, rgba(0,0,0,0) 100%)'
@@ -1280,42 +1314,50 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                             </div>
                         </div>
 
-                        {/* Image block(s) — real flow siblings below the caption. Each
-                            reserves growing height (0→A) so it opens in beneath the text
-                            without ever overlapping it; the inner image is centered so it
-                            reveals middle-out while fading in. */}
+                        {/* Media slot — ONE flow child below the caption. Its height (and
+                            the gap above it) is driven per-frame, so the caption shifts up
+                            to make room via the flex column. Every media box is absolutely
+                            centered inside it and overlaps, so adjacent items cross-fade in
+                            place (old grows + dissolves into new) instead of stacking. */}
+                        <div
+                            ref={mediaSlotRef}
+                            className="media-slot"
+                            style={{ position: 'relative', width: '100%', height: 0 }}
+                        >
                         {mediaItems.map(item => {
-                            const shown = activeMediaId === item.id;
-                            const boxW = item.width || MEDIA_IMAGE_WIDTH;
                             // Editable only when this item is selected, on-screen and paused.
-                            const editable = shown && selectedMediaId === item.id && !isPlaying;
-                            // left/top/width/height are owned by the per-frame rAF loop; keep
+                            const editable = activeMediaId === item.id && selectedMediaId === item.id && !isPlaying;
+                            // width/height/opacity/z are owned by the per-frame rAF loop; keep
                             // them OUT of the React style prop so re-renders don't reset them.
                             const elStyle = { position: 'absolute', willChange: 'left, top, width, height', pointerEvents: 'none', userSelect: 'none' };
                             return (
                                 <div
                                     key={item.id}
+                                    ref={el => { mediaBoxRefs.current[item.id] = el; }}
                                     onMouseDown={editable ? beginMediaPan(item) : undefined}
                                     onWheel={editable ? handleMediaWheel(item) : undefined}
                                     style={{
-                                        alignSelf: 'center',
-                                        position: 'relative',
-                                        width: boxW,
-                                        height: shown ? item.height : 0,
-                                        marginTop: shown ? MEDIA_IMAGE_GAP : 0,
-                                        opacity: shown ? 1 : 0,
+                                        // width / height / opacity / zIndex are owned by the rAF
+                                        // loop; only static props live in the React style.
+                                        position: 'absolute',
+                                        left: '50%',
+                                        top: '50%',
+                                        transform: 'translate(-50%, -50%)',
                                         overflow: 'hidden',
                                         borderRadius: item.borderRadius ?? MEDIA_IMAGE_RADIUS,
                                         pointerEvents: editable ? 'auto' : 'none',
                                         cursor: editable ? (mediaPanning ? 'grabbing' : 'grab') : 'default',
-                                        boxShadow: editable ? 'inset 0 0 0 3px var(--accent)' : 'none',
-                                        transition: `height ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, margin-top ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}, opacity ${MEDIA_TRANSITION_MS}ms ${MEDIA_EASE_CSS}`
+                                        boxShadow: editable ? 'inset 0 0 0 3px var(--accent)' : 'none'
                                     }}
                                 >
                                     {/* A box-sized window (overflow hidden) over the raw full-source
                                         element, positioned imperatively each frame to show the current
-                                        pan/zoom view (which can pan across the whole source). */}
-                                    <div style={{ position: 'absolute', top: '50%', left: 0, width: '100%', height: item.height, transform: 'translateY(-50%)', overflow: 'hidden' }}>
+                                        pan/zoom view (which can pan across the whole source). Its height
+                                        (boxH) is rAF-driven so the source fills the morphing frame. */}
+                                    <div
+                                        ref={el => { mediaWindowRefs.current[item.id] = el; }}
+                                        style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', overflow: 'hidden' }}
+                                    >
                                         {item.type === 'video' ? (
                                             <video
                                                 ref={el => { mediaElRefs.current[item.id] = el; mediaVideoRefs.current[item.id] = el; }}
@@ -1336,6 +1378,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                 </div>
                             );
                         })}
+                        </div>
                         </div>
                     </div>
                 </div>

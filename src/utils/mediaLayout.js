@@ -280,75 +280,96 @@ const itemReveal = (item, timeSec) => {
     return mediaEase(clamp(r, 0, 1));
 };
 
-const captionCompactAt = (mediaItems, timeSec) => {
-    const iv = mediaItems.map(m => [m.start, m.start + m.duration]).sort((a, b) => a[0] - b[0]);
-    const merged = [];
-    for (const [s, e] of iv) {
-        const last = merged[merged.length - 1];
-        if (last && s <= last[1] + 1e-6) last[1] = Math.max(last[1], e);
-        else merged.push([s, e]);
-    }
-    let best = 0;
-    for (const [s, e] of merged) {
-        if (timeSec < s || timeSec >= e + T_SEC) continue;
-        let r = Math.min((timeSec - s) / T_SEC, 1);
-        if (timeSec > e) r = Math.min(r, 1 - (timeSec - e) / T_SEC);
-        best = Math.max(best, clamp(r, 0, 1));
-    }
-    return mediaEase(best);
-};
+// Does another item END exactly where this one STARTS (touching before)?
+const hasTouchBefore = (items, item) =>
+    items.some(o => o !== item && Math.abs((o.start + o.duration) - item.start) < 1e-4);
+// Does another item START exactly where this one ENDS (touching after)?
+const hasTouchAfter = (items, item) =>
+    items.some(o => o !== item && Math.abs(o.start - (item.start + item.duration)) < 1e-4);
 
-// Kept for the live preview, which only needs the caption height at a 0/1 target
-// (CSS smooths it). Single-item; layout of the media blocks is done in CSS.
-export const getMediaGeometry = (item, progress, fontSize, videoAlignPercent = 50) => {
-    const expandedH = CAPTION_EXPANDED_EM * fontSize;
-    const compactH = CAPTION_COMPACT_EM * fontSize;
-    const restCenter = (videoAlignPercent / 100) * SCREEN_H;
-    const captionHeight = expandedH + (compactH - expandedH) * progress;
-    return { captionHeight, captionCenterY: restCenter, captionShift: 0, image: null };
-};
-
-// Full per-frame layout for the export engine: caption band + a stack of the
-// media blocks currently revealed (0, 1, or 2 during a cross-fade), matching the
-// preview's centered flex column.
+// Full per-frame layout for both the export engine AND the live preview: a caption
+// band plus a SINGLE shared media frame. All items revealed right now share that
+// one frame (same centre) so a hand-off is a genuine CONVERT, not a ghost:
+//   - The frame's size (slotW × slotH) is a reveal-WEIGHTED AVERAGE of the items,
+//     so it MORPHS from the old media's dimensions to the new one's (no additive
+//     bulge, and the caption barely moves).
+//   - Both cross-fading images FILL that one morphing frame, so their edges stay
+//     aligned as the frame converts from the old size to the new size.
+//   - It's a CLEAN dissolve, not a 50/50 blend: the outgoing image stays fully
+//     opaque as the base while the incoming one dissolves in ON TOP of it — so the
+//     dark background never shows through both (which read as a double-exposure).
+//   - Opening/closing against a GAP still reveals middle-out (clipHeight < boxH).
 export const getMediaLayout = (mediaItems, timeSec, fontSize, videoAlignPercent = 50) => {
     const expandedH = CAPTION_EXPANDED_EM * fontSize;
     const compactH = CAPTION_COMPACT_EM * fontSize;
     const restCenter = (videoAlignPercent / 100) * SCREEN_H;
-    const compact = captionCompactAt(mediaItems, timeSec);
-    const captionHeight = expandedH + (compactH - expandedH) * compact;
 
     const shown = mediaItems
         .map(m => ({ item: m, reveal: itemReveal(m, timeSec) }))
         .filter(s => s.reveal > 0.0005)
         .sort((a, b) => a.item.start - b.item.start);
 
-    let stackH = 0;
-    for (const s of shown) stackH += s.reveal * (MEDIA_IMAGE_GAP + s.item.height);
+    let wSum = 0, hSum = 0, presenceSum = 0;
+    for (const s of shown) {
+        wSum += s.reveal * (s.item.width || MEDIA_IMAGE_WIDTH);
+        hSum += s.reveal * s.item.height;
+        presenceSum += s.reveal;
+    }
+    const presence = clamp(presenceSum, 0, 1);        // ~1 across a touching run, dips in gaps
+    // Weighted AVERAGE (÷ Σreveal) so a hand-off MORPHS between the two sizes; the
+    // ÷1 floor keeps a lone item growing in from zero against a gap.
+    const denom = Math.max(1, presenceSum);
+    const slotW = wSum / denom;
+    const slotH = hSum / denom;
+    const gap = MEDIA_IMAGE_GAP * presence;
 
-    const groupH = captionHeight + stackH;
+    const captionHeight = expandedH + (compactH - expandedH) * presence;
+    const mediaBlock = slotH > 0 ? gap + slotH : 0;
+    const groupH = captionHeight + mediaBlock;
     const groupTop = restCenter - groupH / 2;
     const captionCenterY = groupTop + captionHeight / 2;
     const captionShift = captionCenterY - restCenter;
+    const slotCenterY = groupTop + captionHeight + gap + slotH / 2;
 
-    let cursor = groupTop + captionHeight;
-    const images = shown.map(s => {
-        const w = s.item.width || MEDIA_IMAGE_WIDTH;
-        const gap = MEDIA_IMAGE_GAP * s.reveal;
-        const clipHeight = s.item.height * s.reveal;
-        const clipTop = cursor + gap;
-        cursor = clipTop + clipHeight;
+    const images = shown.map((s, idx) => {
+        const it = s.item;
+        const w = it.width || MEDIA_IMAGE_WIDTH;
+        const end = it.start + it.duration;
+        const fadingIn = timeSec < it.start + T_SEC;
+        const fadingOut = timeSec > end;
+        const touchBefore = hasTouchBefore(mediaItems, it);
+        const touchAfter = hasTouchAfter(mediaItems, it);
+        const xfadeIn = fadingIn && touchBefore;     // entering a run — dissolve in on top
+        const xfadeOut = fadingOut && touchAfter;    // leaving to next — opaque base, frame morphs
+
+        // clipW×clipH = the (rounded) frame the image is clipped to.
+        let clipW, clipH, opacity;
+        if (xfadeIn || xfadeOut) {
+            clipW = slotW; clipH = slotH;            // the one morphing frame
+            opacity = xfadeOut ? 1 : s.reveal;       // base opaque; incoming dissolves in over it
+        } else if ((fadingIn && !touchBefore) || (fadingOut && !touchAfter)) {
+            clipW = w; clipH = it.height * s.reveal; // gap open/close: reveal middle-out
+            opacity = s.reveal;
+        } else {
+            clipW = w; clipH = it.height; opacity = 1;  // solid
+        }
+
+        // boxW×boxH = size the source is drawn at. It COVERS the frame at the media's
+        // OWN aspect ratio (scale up until it fills, crop the overflow) — never
+        // stretched — so a cross-fading image fills the old media's area cleanly.
+        const coverScale = Math.max(clipW / w, clipH / it.height);
+        const boxW = w * coverScale;
+        const boxH = it.height * coverScale;
+
         return {
-            item: s.item,
-            left: (1080 - w) / 2,
-            width: w,
-            fullHeight: s.item.height,
-            clipTop,
-            clipHeight,
-            centerY: clipTop + clipHeight / 2,
-            opacity: s.reveal
+            item: it,
+            centerY: slotCenterY,
+            left: (1080 - clipW) / 2,
+            boxW, boxH, clipW, clipH,
+            opacity,
+            z: idx                                   // later start draws on top
         };
     });
 
-    return { captionHeight, captionCenterY, captionShift, images };
+    return { captionHeight, captionCenterY, captionShift, slotHeight: slotH, gap, images };
 };

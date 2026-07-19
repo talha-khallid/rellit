@@ -319,7 +319,7 @@ export async function exportVideo({
             // centered in a growing window (clipTop..clipTop+clipHeight), showing
             // the current pan/zoom view of the source.
             for (const im of media.images) {
-                if (im.clipHeight <= 0) continue;
+                if (im.clipH <= 0) continue;
                 const it = im.item;
                 const isVideo = it.type === 'video';
                 const el = isVideo ? preloadedMediaVideos[it.src] : preloadedMediaImages[it.src];
@@ -336,15 +336,16 @@ export async function exportVideo({
                     if (vidDur > 0) vt = clamp(vt, 0, vidDur - 0.03);
                     await seekVideoTo(el, vt);
                 }
-                const { left, width, fullHeight, clipTop, clipHeight, centerY, opacity } = im;
+                const { centerY, boxW, boxH, clipW, clipH, opacity } = im;
                 const view = sampleKeyframes(it.keyframes, mediaLocalProgress(it, currentTimeMs / 1000), it.crop);
                 const { sx, sy, sw, sh } = composeCropView(natW, natH, it.crop, view);
                 const radius = it.borderRadius ?? MEDIA_IMAGE_RADIUS;
                 ctx.save();
                 ctx.globalAlpha = opacity;
-                roundRectPath(ctx, left, clipTop, width, clipHeight, Math.min(radius, clipHeight / 2, width / 2));
+                // Clip to the (rounded) shared frame, then draw the source filling the box.
+                roundRectPath(ctx, 540 - clipW / 2, centerY - clipH / 2, clipW, clipH, Math.min(radius, clipH / 2, clipW / 2));
                 ctx.clip();
-                ctx.drawImage(el, sx, sy, sw, sh, left, centerY - fullHeight / 2, width, fullHeight);
+                ctx.drawImage(el, sx, sy, sw, sh, 540 - boxW / 2, centerY - boxH / 2, boxW, boxH);
                 ctx.restore();
             }
 
@@ -629,7 +630,7 @@ export async function exportVideo({
             ctx.fillStyle = videoBgColor || '#050505';
             const keep = [[bandTop, bandTop + bandH]];
             for (const im of media.images) {
-                if (im.clipHeight > 0) keep.push([im.clipTop, im.clipTop + im.clipHeight]);
+                if (im.clipH > 0) keep.push([im.centerY - im.clipH / 2, im.centerY + im.clipH / 2]);
             }
             keep.sort((a, b) => a[0] - b[0]);
             const merged = [];
