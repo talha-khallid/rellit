@@ -6,6 +6,9 @@
 // extra dependencies and nothing to compile.
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
+import os from 'node:os';
+import fs from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -69,11 +72,95 @@ function sendJson(res, status, obj) {
     res.end(JSON.stringify(obj));
 }
 
+// Collect a raw binary request body (used for the exported MP4 upload).
+function readRawBody(req) {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        let size = 0;
+        req.on('data', chunk => {
+            size += chunk.length;
+            if (size > 512 * 1024 * 1024) { req.destroy(); reject(new Error('Upload too large')); return; } // 512MB guard
+            chunks.push(chunk);
+        });
+        req.on('end', () => resolve(Buffer.concat(chunks)));
+        req.on('error', reject);
+    });
+}
+
+// Transcode ONLY the audio of an exported MP4 to AAC (video is stream-copied, so
+// there's no visual re-encode / quality loss). This exists because Chromium on
+// Linux has no AAC *encoder* in WebCodecs — the browser can only make Opus, and
+// Opus-in-MP4 is rejected by WhatsApp. Running the system ffmpeg produces a
+// standard AAC track so the file uploads everywhere. Temp files live in the OS
+// temp dir and are always cleaned up; the project DB is never touched.
+function remuxAudioToAac(inputBuffer) {
+    return new Promise(async (resolve, reject) => {
+        const tag = Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+        const inPath = path.join(os.tmpdir(), `rellit_in_${tag}.mp4`);
+        const outPath = path.join(os.tmpdir(), `rellit_out_${tag}.mp4`);
+        const cleanup = async () => {
+            await fs.rm(inPath, { force: true }).catch(() => {});
+            await fs.rm(outPath, { force: true }).catch(() => {});
+        };
+        try {
+            await fs.writeFile(inPath, inputBuffer);
+            // -c:v copy = keep the H.264 stream untouched; only re-encode audio.
+            const args = [
+                '-y', '-i', inPath,
+                '-map', '0:v:0', '-map', '0:a:0?',
+                '-c:v', 'copy',
+                '-c:a', 'aac', '-b:a', '256k', '-ac', '2',
+                '-movflags', '+faststart',
+                outPath
+            ];
+            const ff = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
+            let stderr = '';
+            ff.stderr.on('data', d => { stderr += d.toString(); if (stderr.length > 20000) stderr = stderr.slice(-20000); });
+            ff.on('error', async (e) => {
+                await cleanup();
+                // ENOENT → ffmpeg isn't installed on this machine.
+                reject(new Error(e.code === 'ENOENT' ? 'ffmpeg-not-found' : String(e.message || e)));
+            });
+            ff.on('close', async (code) => {
+                if (code !== 0) { await cleanup(); reject(new Error('ffmpeg exited ' + code + ': ' + stderr.slice(-500))); return; }
+                try {
+                    const out = await fs.readFile(outPath);
+                    await cleanup();
+                    resolve(out);
+                } catch (e) {
+                    await cleanup();
+                    reject(e);
+                }
+            });
+        } catch (e) {
+            await cleanup();
+            reject(e);
+        }
+    });
+}
+
 async function handle(req, res) {
     const database = getDb();
     const url = new URL(req.url, 'http://localhost');
     const parts = url.pathname.replace(/^\/api\//, '').split('/').filter(Boolean);
     const method = req.method;
+
+    // POST /api/remux-aac — body is a raw MP4; returns the same video with its
+    // audio converted to AAC (see remuxAudioToAac). Used by the exporter when the
+    // browser could only produce Opus audio (WhatsApp-incompatible).
+    if (parts[0] === 'remux-aac' && method === 'POST') {
+        try {
+            const input = await readRawBody(req);
+            const output = await remuxAudioToAac(input);
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'video/mp4');
+            res.end(output);
+        } catch (e) {
+            const msg = String((e && e.message) || e);
+            sendJson(res, msg === 'ffmpeg-not-found' ? 501 : 500, { error: msg });
+        }
+        return;
+    }
 
     if (parts[0] !== 'projects') return sendJson(res, 404, { error: 'Not found' });
 

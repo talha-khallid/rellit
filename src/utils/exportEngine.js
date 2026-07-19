@@ -99,24 +99,34 @@ export async function exportVideo({
             }
         }
         const hasVideoAudio = Object.values(videoAudioBuffers).some(Boolean);
+        const hasRealAudio = segments.some(s => s.audioBuffer) || hasVideoAudio;
 
-        const hasAnyAudio = segments.some(s => s.audioBuffer) || hasVideoAudio;
-        let audioCodecConfig = 'mp4a.40.2';
-        let muxerAudioCodec = 'aac';
-
-        if (hasAnyAudio) {
-            try {
-                const support = await AudioEncoder.isConfigSupported({
-                    codec: 'mp4a.40.2',
-                    sampleRate: EXPORT_SAMPLE_RATE,
-                    numberOfChannels: 2
-                });
-                if (!support.supported) throw new Error("AAC not supported");
-            } catch (e) {
-                audioCodecConfig = 'opus';
-                muxerAudioCodec = 'opus';
-            }
+        // Container-compat rule: WhatsApp (and many MP4 players) read AAC audio but
+        // NOT Opus inside an .mp4 — an Opus-in-MP4 file is rejected as "file not
+        // supported". A video-only H.264 MP4 is accepted everywhere. So we ONLY add
+        // an audio track when this browser can encode AAC; there is deliberately no
+        // Opus fallback, because it would break sharing. (Chromium on Linux often
+        // lacks the proprietary AAC encoder — that path now ships video-only.)
+        let aacSupported = true;
+        try {
+            const support = await AudioEncoder.isConfigSupported({
+                codec: 'mp4a.40.2',
+                sampleRate: EXPORT_SAMPLE_RATE,
+                numberOfChannels: 2
+            });
+            aacSupported = !!(support && support.supported);
+        } catch (e) {
+            aacSupported = false;
         }
+        // When the browser CAN encode AAC we use it directly. When it can't (e.g.
+        // Chromium on Linux) we still carry the audio as Opus, then hand the file to
+        // the local ffmpeg backend to convert that track to AAC — because an
+        // Opus-in-MP4 won't upload to WhatsApp, but a video-only MP4 or an AAC one
+        // both will. `needsAacTranscode` marks the post-export conversion step.
+        const audioCodecConfig = aacSupported ? 'mp4a.40.2' : 'opus';
+        const muxerAudioCodec = aacSupported ? 'aac' : 'opus';
+        const includeAudio = hasRealAudio;
+        const needsAacTranscode = hasRealAudio && !aacSupported;
 
         const muxerOptions = {
             target: new Mp4Muxer.ArrayBufferTarget(),
@@ -127,7 +137,7 @@ export async function exportVideo({
         const segmentAudioData = {};
         let audioEncoder = null;
 
-        if (hasAnyAudio) {
+        if (includeAudio) {
             for (let i = 0; i < segments.length; i++) {
                 if (segments[i].audioBuffer) {
                     segmentAudioData[i] = segments[i].audioBuffer;
@@ -138,7 +148,7 @@ export async function exportVideo({
 
         const muxer = new Mp4Muxer.Muxer(muxerOptions);
 
-        if (hasAnyAudio) {
+        if (includeAudio) {
             audioEncoder = new AudioEncoder({
                 output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
                 error: e => console.error(e)
@@ -754,16 +764,43 @@ export async function exportVideo({
         muxer.finalize();
 
         const buffer = muxer.target.buffer;
-        const blob = new Blob([buffer], { type: 'video/mp4' });
-        const url = URL.createObjectURL(blob);
+        let outBlob = new Blob([buffer], { type: 'video/mp4' });
+        let audioWarning = '';
 
+        // Opus audio → convert to AAC via the local ffmpeg backend so the file is
+        // WhatsApp-compatible. Video is stream-copied server-side (no re-encode).
+        if (needsAacTranscode) {
+            setProgress("Converting audio to AAC…", 100);
+            await yieldToMain();
+            try {
+                const resp = await fetch('/api/remux-aac', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'video/mp4' },
+                    body: outBlob
+                });
+                if (resp.ok) {
+                    outBlob = await resp.blob();
+                } else {
+                    const info = await resp.json().catch(() => ({}));
+                    audioWarning = info.error === 'ffmpeg-not-found'
+                        ? " (warning: ffmpeg not found on the server — audio is Opus and may not upload to WhatsApp)"
+                        : " (warning: audio couldn't be converted to AAC — may not upload to WhatsApp)";
+                    console.warn('[export] AAC transcode failed:', info.error);
+                }
+            } catch (e) {
+                audioWarning = " (warning: audio-conversion service unreachable — run the app locally to get AAC)";
+                console.warn('[export] AAC transcode request failed:', e);
+            }
+        }
+
+        const url = URL.createObjectURL(outBlob);
         const a = document.createElement('a');
         a.href = url;
         a.download = 'captions-export.mp4';
         a.click();
         URL.revokeObjectURL(url);
 
-        setProgress("Export Complete!", 100);
+        setProgress("Export Complete!" + audioWarning, 100);
         if (onComplete) onComplete();
     } catch (err) {
         console.error(err);
