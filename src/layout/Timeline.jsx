@@ -599,6 +599,7 @@ export const Timeline = () => {
                                         className={`timeline-block audio-block ${trimmed ? 'edited' : ''}`}
                                         style={{ left: ab.start * timelineScale, width: blockWidth, top: 0, padding: 0, height: '100%' }}
                                         title="Double-click to trim / cut this audio"
+                                        onMouseDown={(e) => e.stopPropagation()}
                                         onDoubleClick={(e) => { e.stopPropagation(); if (isPlaying) togglePlayback(); setAudioModalSegIdx(ab.index); }}
                                     >
                                         <AudioWaveform
