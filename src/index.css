@@ -2256,3 +2256,23 @@ label.switch-row {
 }
 .atm-hint { margin-top: 10px; font-size: 11px; color: #77777e; }
 .audio-block.edited { outline: 1px solid rgba(255, 209, 102, 0.6); outline-offset: -1px; }
+
+/* Hide forced breaks when measuring natural layout */
+.measuring .forced-break {
+    display: none !important;
+}
+
+/* Ensure components take full space when measuring. transition:none is CRITICAL —
+   the component animates its width (0.3s), so without this the synchronous
+   measurement catches a mid-animation width and the wrap point (forced break)
+   comes out inconsistent, making words like "5.6" jump between states. */
+.measuring .inline-comp-span {
+    margin-right: 0 !important;
+    transition: none !important;
+}
+.measuring .inline-component-img {
+    width: var(--comp-size) !important;
+    opacity: 1 !important;
+    transform: scale(1) !important;
+    transition: none !important;
+}

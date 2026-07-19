@@ -232,6 +232,9 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
 
         const calculateVisualLines = () => {
             if (cancelled || !trackRef.current) return;
+            trackRef.current.classList.add('measuring');
+            void trackRef.current.offsetHeight;
+
             const wordSpans = trackRef.current.querySelectorAll('.word');
             const newVisualLines = [];
             let currentLine = [];
@@ -260,6 +263,8 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                 }
             });
             if (currentLine.length > 0) newVisualLines.push(currentLine);
+
+            trackRef.current.classList.remove('measuring');
 
             setVisualLines(newVisualLines);
             updateLineSettings(newVisualLines, lineSettingsRef.current, segments);
@@ -1073,6 +1078,14 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                         if (visualLines[currentLineIndex]) {
                                             active = visualLines[currentLineIndex].some(span => span.el && span.el.dataset.segIndex == word.segIndex && parseInt(span.el.dataset.wordIdx) === wIdx);
                                         }
+                                        
+                                        let isLastInVisualLine = false;
+                                        if (visualLines.length > 0 && wIdx !== renderedWords.length - 1) {
+                                            isLastInVisualLine = visualLines.some(line => {
+                                                const lastSpan = line[line.length - 1];
+                                                return lastSpan && lastSpan.el && parseInt(lastSpan.el.dataset.wordIdx) === wIdx;
+                                            });
+                                        }
 
                                         // STRICT SELECTION FIX: Only active words are selectable when paused
                                         const isSelectable = active && !isPlaying;
@@ -1144,7 +1157,8 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                             marginBottom: '-5px',
                                                             marginLeft: '0',
                                                             marginRight: (!active && compBehavior === 'collapse') ? '-0.25em' : '0',
-                                                            transition: 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                            transition: 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                            '--comp-size': `${customComponents.find(c => c.id === word.componentId)?.size || 0}px`
                                                         }}
                                                     >
                                                         {(() => {
@@ -1189,7 +1203,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                                             <img
                                                                                 src={comp.src}
                                                                                 alt="comp"
-                                                                                className={`inline-component ${active ? `anim-${comp.animation}` : ''}`}
+                                                                                className={`inline-component inline-component-img ${active ? `anim-${comp.animation}` : ''}`}
                                                                                 data-animation={comp.animation}
                                                                                 data-before-behavior={behaviors.before}
                                                                                 data-after-behavior={behaviors.after}
@@ -1317,6 +1331,7 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                                 </span>
                                                 )}
                                                 {(word.isLastInSeg || word.hasNewlineAfter) && wIdx !== renderedWords.length - 1 && <div style={{ flexBasis: '100%', height: 0 }}></div>}
+                                                {isLastInVisualLine && !(word.isLastInSeg || word.hasNewlineAfter) && <div className="forced-break" style={{ flexBasis: '100%', height: 0 }}></div>}
                                             </React.Fragment>
                                         );
                                     })}
