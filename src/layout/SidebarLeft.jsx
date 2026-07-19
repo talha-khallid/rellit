@@ -71,7 +71,10 @@ export const SidebarLeft = () => {
         fontSize, setFontSize,
         textAlign, setTextAlign,
         letterSpacing, setLetterSpacing,
-        activeTab
+        activeTab,
+        lineSettings, setLineSettings,
+        charOverrides, setCharOverrides,
+        setCurrentSelectionCharIds
     } = useContext(EditorContext);
 
     const renderTypographySettings = () => (
@@ -195,10 +198,80 @@ export const SidebarLeft = () => {
             audioBuffer: decoded,
             audioData: arrayBufferToBase64(arrayBuffer),
             audioDuration: tempAudio.duration,
-            duration: tempAudio.duration
+            duration: tempAudio.duration,
+            audioEdit: undefined // Clear any previous trims
         };
         setSegments(updated);
         setCurrentlyPlayingSegIdx(-1);
+    };
+
+    const moveSegment = (index, dir) => {
+        if (isPlaying) togglePlayback();
+        if (index + dir < 0 || index + dir >= segments.length) return;
+
+        const idxA = Math.min(index, index + dir);
+        const idxB = Math.max(index, index + dir);
+        
+        let minCharA = Infinity, maxCharA = -Infinity;
+        let minCharB = Infinity, maxCharB = -Infinity;
+        let minLineA = Infinity, maxLineA = -Infinity;
+        let minLineB = Infinity, maxLineB = -Infinity;
+
+        visualLines.forEach((line, lineIdx) => {
+            let hasA = false, hasB = false;
+            line.forEach(span => {
+                if (span.segIndex === idxA) {
+                    hasA = true;
+                    const charId = parseInt(span.el.dataset.charId);
+                    if (!isNaN(charId)) { minCharA = Math.min(minCharA, charId); maxCharA = Math.max(maxCharA, charId); }
+                } else if (span.segIndex === idxB) {
+                    hasB = true;
+                    const charId = parseInt(span.el.dataset.charId);
+                    if (!isNaN(charId)) { minCharB = Math.min(minCharB, charId); maxCharB = Math.max(maxCharB, charId); }
+                }
+            });
+            if (hasA) { minLineA = Math.min(minLineA, lineIdx); maxLineA = Math.max(maxLineA, lineIdx); }
+            if (hasB) { minLineB = Math.min(minLineB, lineIdx); maxLineB = Math.max(maxLineB, lineIdx); }
+        });
+
+        const lenCharA = maxCharA !== -Infinity ? (maxCharA - minCharA + 1) : 0;
+        const lenCharB = maxCharB !== -Infinity ? (maxCharB - minCharB + 1) : 0;
+        const lenLineA = maxLineA !== -Infinity ? (maxLineA - minLineA + 1) : 0;
+        const lenLineB = maxLineB !== -Infinity ? (maxLineB - minLineB + 1) : 0;
+
+        const newOverrides = {};
+        Object.keys(charOverrides).forEach(key => {
+            const id = parseInt(key);
+            if (id >= minCharA && id <= maxCharA) {
+                newOverrides[id + lenCharB] = charOverrides[id];
+            } else if (id >= minCharB && id <= maxCharB) {
+                newOverrides[id - lenCharA] = charOverrides[id];
+            } else {
+                newOverrides[id] = charOverrides[id];
+            }
+        });
+
+        const newSettings = {};
+        Object.keys(lineSettings).forEach(key => {
+            const l = parseInt(key);
+            if (l >= minLineA && l <= maxLineA) {
+                newSettings[l + lenLineB] = lineSettings[l];
+            } else if (l >= minLineB && l <= maxLineB) {
+                newSettings[l - lenLineA] = lineSettings[l];
+            } else {
+                newSettings[l] = lineSettings[l];
+            }
+        });
+
+        const newSegments = [...segments];
+        const temp = newSegments[idxA];
+        newSegments[idxA] = newSegments[idxB];
+        newSegments[idxB] = temp;
+
+        setCurrentSelectionCharIds([]);
+        setCharOverrides(newOverrides);
+        setLineSettings(newSettings);
+        setSegments(newSegments);
     };
 
     const handleAddSegment = () => {
@@ -308,6 +381,16 @@ export const SidebarLeft = () => {
                                                         <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                                     </svg>
                                                 </button>
+                                                <button className="icon-btn" title="Move Up" disabled={i === 0} onClick={() => moveSegment(i, -1)}>
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <polyline points="18 15 12 9 6 15"></polyline>
+                                                    </svg>
+                                                </button>
+                                                <button className="icon-btn" title="Move Down" disabled={i === segments.length - 1} onClick={() => moveSegment(i, 1)}>
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                                    </svg>
+                                                </button>
                                                 <button className="icon-btn danger" title="Delete segment" onClick={() => handleRemoveSegment(i)}>
                                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                         <polyline points="3 6 5 6 21 6"></polyline>
@@ -323,7 +406,26 @@ export const SidebarLeft = () => {
 
                                         <div className="audio-box">
                                             {seg.audioBuffer ? (
-                                                <Waveform audioBuffer={seg.audioBuffer} />
+                                                <div style={{ display: 'flex', alignItems: 'center', flex: 1, overflow: 'hidden' }}>
+                                                    <Waveform audioBuffer={seg.audioBuffer} />
+                                                    <button 
+                                                        className="icon-btn" 
+                                                        title="Replace audio" 
+                                                        onClick={() => document.getElementById(uniqueInputId).click()}
+                                                        style={{ marginLeft: 12, flexShrink: 0 }}
+                                                    >
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                                                        </svg>
+                                                    </button>
+                                                    <input
+                                                        id={uniqueInputId}
+                                                        type="file"
+                                                        accept="audio/*"
+                                                        style={{ display: 'none' }}
+                                                        onChange={(e) => handleSegmentAudioChange(i, e)}
+                                                    />
+                                                </div>
                                             ) : (
                                                 <div
                                                     style={{ color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flex: 1, fontSize: 12 }}
