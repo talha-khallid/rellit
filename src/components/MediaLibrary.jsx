@@ -79,6 +79,63 @@ export const MediaLibrary = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
+    // Re-upload the source of an EXISTING media item. Keeps all its settings and
+    // placement — crop frame, motion keyframes, start/duration, border radius and
+    // transition — and only re-fits the box height to the new file's aspect (so it
+    // isn't distorted). A type change (image↔video) additionally adds/removes the
+    // video-only fields (videoDuration / trimStart / audioEnabled).
+    const replaceMedia = (id, file, dataUrl) => {
+        const item = mediaItems.find(m => m.id === id);
+        if (!item) return;
+        const isVideo = !!(file && file.type && file.type.startsWith('video'));
+
+        if (isVideo) {
+            const probe = document.createElement('video');
+            probe.preload = 'metadata';
+            probe.onloadedmetadata = () => {
+                const natW = probe.videoWidth || 16, natH = probe.videoHeight || 9;
+                const vidDur = (isFinite(probe.duration) && probe.duration > 0) ? probe.duration : 5;
+                setMediaItems(prev => prev.map(m => {
+                    if (m.id !== id) return m;
+                    const box = cropOutputBox(natW, natH, m.crop);
+                    const wasVideo = m.type === 'video';
+                    const trimStart = wasVideo ? clamp(m.trimStart || 0, 0, Math.max(0, vidDur - 0.1)) : 0;
+                    return {
+                        ...m, type: 'video', src: dataUrl,
+                        width: box.width, height: box.height,
+                        videoDuration: vidDur, trimStart,
+                        duration: Math.max(0.2, Math.min(m.duration, vidDur - trimStart)),
+                        audioEnabled: wasVideo ? !!m.audioEnabled : false
+                    };
+                }));
+            };
+            probe.onerror = () => { /* not a decodable video — leave the item unchanged */ };
+            probe.src = dataUrl;
+        } else {
+            const probe = new Image();
+            probe.onload = () => {
+                setMediaItems(prev => prev.map(m => {
+                    if (m.id !== id) return m;
+                    const box = cropOutputBox(probe.naturalWidth, probe.naturalHeight, m.crop);
+                    // Drop video-only fields when switching a video → image.
+                    const { videoDuration, trimStart, audioEnabled, ...rest } = m;
+                    return { ...rest, type: 'image', src: dataUrl, width: box.width, height: box.height };
+                }));
+            };
+            probe.onerror = () => {};
+            probe.src = dataUrl;
+        }
+    };
+
+    const handleReplaceUpload = (id, e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => replaceMedia(id, file, evt.target.result);
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
+
     const handlePaste = (e) => {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (let index in items) {
@@ -225,6 +282,24 @@ export const MediaLibrary = () => {
                                             <span className="motion-badge" title={`${item.keyframes.length} motion keyframe${item.keyframes.length > 1 ? 's' : ''}`}>⤢ {item.keyframes.length}</span>
                                         )}
                                     </span>
+                                    <button
+                                        className="icon-btn"
+                                        title="Replace media (keeps crop, motion & placement)"
+                                        onClick={(e) => { e.stopPropagation(); document.getElementById(`media-replace-${item.id}`).click(); }}
+                                    >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                            <polyline points="17 8 12 3 7 8"></polyline>
+                                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                                        </svg>
+                                    </button>
+                                    <input
+                                        id={`media-replace-${item.id}`}
+                                        type="file"
+                                        accept="image/*,video/*"
+                                        style={{ display: 'none' }}
+                                        onChange={(e) => handleReplaceUpload(item.id, e)}
+                                    />
                                     <button className="icon-btn danger" title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <polyline points="3 6 5 6 21 6"></polyline>
