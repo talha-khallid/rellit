@@ -1,7 +1,7 @@
 import React, { useContext, useRef, useState, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { AudioWaveform } from '../components/AudioWaveform';
-import { clampMediaWindow, keyframeAt, newKeyframe, sampleKeyframes, clamp, MEDIA_MIN_GAP_SEC } from '../utils/mediaLayout';
+import { clampMediaWindow, keyframeAt, newKeyframe, sampleKeyframes, clamp, MEDIA_MIN_GAP_SEC, MEDIA_TRANSITION_TYPES, getItemTransition } from '../utils/mediaLayout';
 
 export const Timeline = () => {
     const {
@@ -47,12 +47,44 @@ export const Timeline = () => {
     const [kfMoveStartT, setKfMoveStartT] = useState(0);
 
     const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
+    // Transition editor popup: which incoming item + where to anchor the panel.
+    const [transitionPopup, setTransitionPopup] = useState(null); // { itemId, x, y }
     const scrollAreaRef = useRef(null);
     const timelineContentRef = useRef(null);
     const playheadRef = useRef(null);
     const timeDisplayRef = useRef(null);
 
     const totalTime = visualLines.reduce((acc, _, i) => acc + parseFloat(lineSettings[i]?.duration || 0.1), 0);
+
+    // Boundaries where two media items TOUCH — each gets a clickable node to edit
+    // the transition (stored on the incoming, i.e. later, item).
+    const sortedMedia = [...mediaItems].sort((a, b) => a.start - b.start);
+    const mediaBoundaries = [];
+    for (let i = 0; i < sortedMedia.length - 1; i++) {
+        const A = sortedMedia[i], B = sortedMedia[i + 1];
+        if (Math.abs(B.start - (A.start + A.duration)) < 1e-3) {
+            mediaBoundaries.push({ time: A.start + A.duration, incomingId: B.id });
+        }
+    }
+
+    const setItemTransition = (itemId, patch) => {
+        setMediaItems(mediaItems.map(m => (
+            m.id === itemId ? { ...m, transition: { ...getItemTransition(m), ...patch } } : m
+        )));
+    };
+
+    const popupItem = transitionPopup ? mediaItems.find(m => m.id === transitionPopup.itemId) : null;
+    const popupTr = popupItem ? getItemTransition(popupItem) : null;
+
+    // Close the transition popup on outside-click / Escape.
+    useEffect(() => {
+        if (!transitionPopup) return;
+        const onDown = (e) => { if (!e.target.closest('.transition-popup') && !e.target.closest('.transition-node')) setTransitionPopup(null); };
+        const onKey = (e) => { if (e.key === 'Escape') setTransitionPopup(null); };
+        window.addEventListener('mousedown', onDown);
+        window.addEventListener('keydown', onKey);
+        return () => { window.removeEventListener('mousedown', onDown); window.removeEventListener('keydown', onKey); };
+    }, [transitionPopup]);
 
     useEffect(() => {
         let reqId;
@@ -646,10 +678,77 @@ export const Timeline = () => {
                                     />
                                 </div>
                             ))}
+
+                            {/* Transition node between two touching media items. Click to
+                                pick a transition type + duration for the hand-off. */}
+                            {mediaBoundaries.map(b => {
+                                const tr = getItemTransition(mediaItems.find(m => m.id === b.incomingId));
+                                const isOpen = transitionPopup?.itemId === b.incomingId;
+                                return (
+                                    <div
+                                        key={b.incomingId}
+                                        className={`transition-node ${isOpen ? 'open' : ''} ${tr.type === 'cut' ? 'cut' : ''}`}
+                                        style={{ left: b.time * timelineScale }}
+                                        title={`Transition: ${tr.type}${tr.type === 'cut' ? '' : ' · ' + tr.durationMs + 'ms'}`}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const r = e.currentTarget.getBoundingClientRect();
+                                            setTransitionPopup({ itemId: b.incomingId, x: r.left + r.width / 2, y: r.top });
+                                        }}
+                                    >
+                                        <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
+                                            <path d="M9 7L4 12l5 5V7zm6 0v10l5-5-5-5z" />
+                                        </svg>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
             </div>
+
+            {transitionPopup && popupTr && (
+                <div
+                    className="transition-popup"
+                    style={{ left: clamp(transitionPopup.x, 150, window.innerWidth - 150), top: transitionPopup.y - 12 }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                >
+                    <div className="transition-popup-title">Transition</div>
+                    <div className="transition-type-grid">
+                        {MEDIA_TRANSITION_TYPES.map(t => (
+                            <button
+                                key={t.id}
+                                className={`transition-type-btn ${popupTr.type === t.id ? 'active' : ''}`}
+                                onClick={() => setItemTransition(transitionPopup.itemId, {
+                                    type: t.id,
+                                    // Give a real length when leaving 'cut'; 'cut' forces 0.
+                                    durationMs: t.id === 'cut' ? 0 : (popupTr.durationMs > 0 ? popupTr.durationMs : 500)
+                                })}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className={`transition-duration-row ${popupTr.type === 'cut' ? 'disabled' : ''}`}>
+                        <label>Duration</label>
+                        <input
+                            type="range" min="80" max="2000" step="20"
+                            value={popupTr.durationMs || 0}
+                            disabled={popupTr.type === 'cut'}
+                            onChange={(e) => setItemTransition(transitionPopup.itemId, { durationMs: parseInt(e.target.value) })}
+                        />
+                        <input
+                            type="number" min="0" max="4000" step="10"
+                            className="transition-ms-input"
+                            value={popupTr.durationMs || 0}
+                            disabled={popupTr.type === 'cut'}
+                            onChange={(e) => setItemTransition(transitionPopup.itemId, { durationMs: Math.max(0, parseInt(e.target.value) || 0) })}
+                        />
+                        <span className="transition-ms-unit">ms</span>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -543,12 +543,18 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
             }
             const layoutById = {};
             for (const im of layout.images) layoutById[im.item.id] = im;
+            // The media-slot's top in 1080×1920 space; box positions are relative to it.
+            const slotTop = layout.slotCenterY - layout.slotHeight / 2;
 
             for (const item of mediaItems) {
                 const im = layoutById[item.id];
                 const box = mediaBoxRefs.current[item.id];
+                const win = mediaWindowRefs.current[item.id];
                 if (box) {
                     if (im) {
+                        // Clip frame (rounded, overflow-hidden), placed within the slot.
+                        box.style.left = im.clipX + 'px';
+                        box.style.top = (im.clipY - slotTop) + 'px';
                         box.style.width = im.clipW + 'px';
                         box.style.height = im.clipH + 'px';
                         box.style.opacity = im.opacity;
@@ -559,13 +565,16 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                         box.style.height = '0px';
                     }
                 }
-                // The inner window (which the raw element fills) is sized to boxW×boxH
-                // and centred; it COVERS the clip frame at the media's own aspect, and
-                // the box's overflow:hidden crops the overflow (no stretching).
+                // Inner window = the cover draw-box (boxW×boxH), positioned relative to
+                // the clip frame; the box's overflow:hidden crops the overflow.
                 const bw = im ? im.boxW : (item.width || MEDIA_IMAGE_WIDTH);
                 const bh = im ? im.boxH : item.height;
-                const win = mediaWindowRefs.current[item.id];
-                if (win) { win.style.width = bw + 'px'; win.style.height = bh + 'px'; }
+                if (win && im) {
+                    win.style.width = bw + 'px';
+                    win.style.height = bh + 'px';
+                    win.style.left = (im.drawCX - bw / 2 - im.clipX) + 'px';
+                    win.style.top = (im.drawCY - bh / 2 - im.clipY) + 'px';
+                }
                 const el = mediaElRefs.current[item.id];
                 if (el) {
                     const view = (item.keyframes && item.keyframes.length)
@@ -1337,12 +1346,9 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                     onMouseDown={editable ? beginMediaPan(item) : undefined}
                                     onWheel={editable ? handleMediaWheel(item) : undefined}
                                     style={{
-                                        // width / height / opacity / zIndex are owned by the rAF
-                                        // loop; only static props live in the React style.
+                                        // left / top / width / height / opacity / zIndex are owned
+                                        // by the rAF loop; only static props live in the React style.
                                         position: 'absolute',
-                                        left: '50%',
-                                        top: '50%',
-                                        transform: 'translate(-50%, -50%)',
                                         overflow: 'hidden',
                                         borderRadius: item.borderRadius ?? MEDIA_IMAGE_RADIUS,
                                         pointerEvents: editable ? 'auto' : 'none',
@@ -1350,13 +1356,13 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                                         boxShadow: editable ? 'inset 0 0 0 3px var(--accent)' : 'none'
                                     }}
                                 >
-                                    {/* A box-sized window (overflow hidden) over the raw full-source
-                                        element, positioned imperatively each frame to show the current
-                                        pan/zoom view (which can pan across the whole source). Its height
-                                        (boxH) is rAF-driven so the source fills the morphing frame. */}
+                                    {/* The cover draw-box (overflow hidden) over the raw full-source
+                                        element. Its size/position within the clip frame is rAF-driven
+                                        so the source covers the frame and transitions (slide/wipe/zoom)
+                                        can offset it; the pan/zoom view fills it. */}
                                     <div
                                         ref={el => { mediaWindowRefs.current[item.id] = el; }}
-                                        style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', overflow: 'hidden' }}
+                                        style={{ position: 'absolute', top: 0, left: 0, overflow: 'hidden' }}
                                     >
                                         {item.type === 'video' ? (
                                             <video

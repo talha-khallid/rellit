@@ -265,47 +265,71 @@ export const keyframeAt = (keyframes, t, tEps = 0.01) => {
 export const normalizeKeyframe = (k, crop) => ({ id: k.id, t: clamp(k.t ?? 0, 0, 1), ...clampView(k, crop) });
 
 // ---------------------------------------------------------------------------
-// Timeline reveal model. Each item fades in over its first TRANSITION and out
-// over the TRANSITION after its end (matching the preview's CSS transitions).
-// Adjacent items therefore cross-fade; the caption stays compact across a whole
-// run of touching media (its target follows the UNION of windows).
+// Transitions. A media item may carry `transition: { type, durationMs }` telling
+// how it enters from a TOUCHING predecessor. It only applies where the item butts
+// against the previous one; a lone item opening against a gap uses the default
+// reveal. durationMs is the length of the hand-off overlap (the incoming enters
+// AND the outgoing fades under it over that time). 'cut' = 0-length instant swap.
 // ---------------------------------------------------------------------------
-const T_SEC = MEDIA_TRANSITION_MS / 1000;
+const DEFAULT_T = MEDIA_TRANSITION_MS / 1000;
 
-const itemReveal = (item, timeSec) => {
+export const MEDIA_TRANSITION_TYPES = [
+    { id: 'cut', label: 'Cut' },
+    { id: 'dissolve', label: 'Dissolve' },
+    { id: 'zoom', label: 'Zoom' },
+    { id: 'wipe', label: 'Wipe' },
+    { id: 'slide-up', label: 'Slide up' },
+    { id: 'slide-down', label: 'Slide down' },
+    { id: 'slide-left', label: 'Slide left' },
+    { id: 'slide-right', label: 'Slide right' }
+];
+export const DEFAULT_TRANSITION_TYPE = 'dissolve';
+
+export const getItemTransition = (item) => ({
+    type: item?.transition?.type || DEFAULT_TRANSITION_TYPE,
+    durationMs: Math.max(0, item?.transition?.durationMs ?? MEDIA_TRANSITION_MS)
+});
+
+// Neighbours that TOUCH (share an edge) with `item`.
+const prevTouching = (items, item) =>
+    items.find(o => o !== item && Math.abs((o.start + o.duration) - item.start) < 1e-4) || null;
+const nextTouching = (items, item) =>
+    items.find(o => o !== item && Math.abs(o.start - (item.start + item.duration)) < 1e-4) || null;
+const hasTouchBefore = (items, item) => !!prevTouching(items, item);
+const hasTouchAfter = (items, item) => !!nextTouching(items, item);
+
+// Hand-off length INTO this item (its own transition, when it touches a predecessor)
+// and OUT of it (the NEXT touching item's transition — both sides must agree).
+const fadeInDur = (items, item) => hasTouchBefore(items, item) ? getItemTransition(item).durationMs / 1000 : DEFAULT_T;
+const fadeOutDur = (items, item) => { const n = nextTouching(items, item); return n ? getItemTransition(n).durationMs / 1000 : DEFAULT_T; };
+
+// How present item is at t (0..1, eased): fades in over fadeInDur from its start,
+// out over fadeOutDur after its end. A 0-length hand-off ('cut') swaps instantly.
+const itemReveal = (items, item, timeSec) => {
     const s = item.start, e = item.start + item.duration;
-    if (timeSec < s || timeSec >= e + T_SEC) return 0;
-    let r = Math.min((timeSec - s) / T_SEC, 1);       // fade in
-    if (timeSec > e) r = Math.min(r, 1 - (timeSec - e) / T_SEC); // fade out
+    const Tin = fadeInDur(items, item), Tout = fadeOutDur(items, item);
+    if (timeSec < s || timeSec >= e + Tout) return 0;
+    let r = 1;
+    if (Tin > 0 && timeSec < s + Tin) r = Math.min(r, (timeSec - s) / Tin);
+    if (Tout > 0 && timeSec > e) r = Math.min(r, 1 - (timeSec - e) / Tout);
     return mediaEase(clamp(r, 0, 1));
 };
 
-// Does another item END exactly where this one STARTS (touching before)?
-const hasTouchBefore = (items, item) =>
-    items.some(o => o !== item && Math.abs((o.start + o.duration) - item.start) < 1e-4);
-// Does another item START exactly where this one ENDS (touching after)?
-const hasTouchAfter = (items, item) =>
-    items.some(o => o !== item && Math.abs(o.start - (item.start + item.duration)) < 1e-4);
-
 // Full per-frame layout for both the export engine AND the live preview: a caption
-// band plus a SINGLE shared media frame. All items revealed right now share that
-// one frame (same centre) so a hand-off is a genuine CONVERT, not a ghost:
-//   - The frame's size (slotW × slotH) is a reveal-WEIGHTED AVERAGE of the items,
-//     so it MORPHS from the old media's dimensions to the new one's (no additive
-//     bulge, and the caption barely moves).
-//   - Both cross-fading images FILL that one morphing frame, so their edges stay
-//     aligned as the frame converts from the old size to the new size.
-//   - It's a CLEAN dissolve, not a 50/50 blend: the outgoing image stays fully
-//     opaque as the base while the incoming one dissolves in ON TOP of it — so the
-//     dark background never shows through both (which read as a double-exposure).
-//   - Opening/closing against a GAP still reveals middle-out (clipHeight < boxH).
+// band plus a SINGLE shared media frame that the current item(s) occupy. During a
+// hand-off both items share ONE morphing frame (so the caption stays put and their
+// edges stay aligned); the OUTGOING item is the opaque base and the INCOMING one
+// enters over it according to its transition TYPE. Each image is returned as a draw
+// box (the source COVER-fills it, at its own aspect) plus a rounded clip rect —
+// both in 1080×1920 space:
+//   { z, opacity, boxW,boxH, drawCX,drawCY, clipX,clipY,clipW,clipH }
 export const getMediaLayout = (mediaItems, timeSec, fontSize, videoAlignPercent = 50) => {
     const expandedH = CAPTION_EXPANDED_EM * fontSize;
     const compactH = CAPTION_COMPACT_EM * fontSize;
     const restCenter = (videoAlignPercent / 100) * SCREEN_H;
 
     const shown = mediaItems
-        .map(m => ({ item: m, reveal: itemReveal(m, timeSec) }))
+        .map(m => ({ item: m, reveal: itemReveal(mediaItems, m, timeSec) }))
         .filter(s => s.reveal > 0.0005)
         .sort((a, b) => a.item.start - b.item.start);
 
@@ -331,44 +355,50 @@ export const getMediaLayout = (mediaItems, timeSec, fontSize, videoAlignPercent 
     const captionShift = captionCenterY - restCenter;
     const slotCenterY = groupTop + captionHeight + gap + slotH / 2;
 
+    // Size the media so it COVERS a frame (fw×fh) at its own aspect (crop overflow).
+    const cover = (it, w, fw, fh) => { const cs = Math.max(fw / w, fh / it.height); return [w * cs, it.height * cs]; };
+
     const images = shown.map((s, idx) => {
         const it = s.item;
         const w = it.width || MEDIA_IMAGE_WIDTH;
-        const end = it.start + it.duration;
-        const fadingIn = timeSec < it.start + T_SEC;
-        const fadingOut = timeSec > end;
-        const touchBefore = hasTouchBefore(mediaItems, it);
-        const touchAfter = hasTouchAfter(mediaItems, it);
-        const xfadeIn = fadingIn && touchBefore;     // entering a run — dissolve in on top
-        const xfadeOut = fadingOut && touchAfter;    // leaving to next — opaque base, frame morphs
+        const e0 = it.start + it.duration;
+        const Tin = fadeInDur(mediaItems, it), Tout = fadeOutDur(mediaItems, it);
+        const fadingIn = Tin > 0 && timeSec < it.start + Tin;
+        const fadingOut = Tout > 0 && timeSec > e0;
+        const enterFromRun = fadingIn && hasTouchBefore(mediaItems, it);
+        const leaveIntoRun = fadingOut && hasTouchAfter(mediaItems, it);
 
-        // clipW×clipH = the (rounded) frame the image is clipped to.
-        let clipW, clipH, opacity;
-        if (xfadeIn || xfadeOut) {
-            clipW = slotW; clipH = slotH;            // the one morphing frame
-            opacity = xfadeOut ? 1 : s.reveal;       // base opaque; incoming dissolves in over it
-        } else if ((fadingIn && !touchBefore) || (fadingOut && !touchAfter)) {
-            clipW = w; clipH = it.height * s.reveal; // gap open/close: reveal middle-out
-            opacity = s.reveal;
+        const fcx = 540, fcy = slotCenterY;
+        let opacity = 1, boxW, boxH, drawCX = fcx, drawCY = fcy, clipX, clipY, clipW, clipH;
+
+        if (enterFromRun) {
+            // INCOMING — enters the one morphing frame per its transition type.
+            const p = mediaEase(clamp((timeSec - it.start) / Tin, 0, 1));
+            clipW = slotW; clipH = slotH; clipX = fcx - clipW / 2; clipY = fcy - clipH / 2;
+            [boxW, boxH] = cover(it, w, clipW, clipH);
+            switch (getItemTransition(it).type) {
+                case 'zoom': { const sc = 1 + 0.18 * (1 - p); boxW *= sc; boxH *= sc; opacity = p; break; }
+                case 'wipe': clipH = slotH * p; clipY = fcy - slotH / 2; break;
+                case 'slide-up': drawCY = fcy + (1 - p) * slotH; break;
+                case 'slide-down': drawCY = fcy - (1 - p) * slotH; break;
+                case 'slide-left': drawCX = fcx + (1 - p) * slotW; break;
+                case 'slide-right': drawCX = fcx - (1 - p) * slotW; break;
+                default: opacity = p; // 'dissolve'
+            }
+        } else if (leaveIntoRun) {
+            // OUTGOING — opaque base filling the morphing frame.
+            clipW = slotW; clipH = slotH; clipX = fcx - clipW / 2; clipY = fcy - clipH / 2;
+            [boxW, boxH] = cover(it, w, clipW, clipH);
+        } else if (fadingIn || fadingOut) {
+            // Opening/closing against a GAP: reveal middle-out at full width.
+            clipW = w; clipH = it.height * s.reveal; clipX = fcx - w / 2; clipY = fcy - clipH / 2;
+            boxW = w; boxH = it.height; opacity = s.reveal;
         } else {
-            clipW = w; clipH = it.height; opacity = 1;  // solid
+            clipW = w; clipH = it.height; clipX = fcx - w / 2; clipY = fcy - clipH / 2;
+            boxW = w; boxH = it.height;                                          // solid
         }
 
-        // boxW×boxH = size the source is drawn at. It COVERS the frame at the media's
-        // OWN aspect ratio (scale up until it fills, crop the overflow) — never
-        // stretched — so a cross-fading image fills the old media's area cleanly.
-        const coverScale = Math.max(clipW / w, clipH / it.height);
-        const boxW = w * coverScale;
-        const boxH = it.height * coverScale;
-
-        return {
-            item: it,
-            centerY: slotCenterY,
-            left: (1080 - clipW) / 2,
-            boxW, boxH, clipW, clipH,
-            opacity,
-            z: idx                                   // later start draws on top
-        };
+        return { item: it, z: idx, opacity, boxW, boxH, drawCX, drawCY, clipX, clipY, clipW, clipH };
     });
 
     return { captionHeight, captionCenterY, captionShift, slotHeight: slotH, gap, images };

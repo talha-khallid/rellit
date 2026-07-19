@@ -319,7 +319,7 @@ export async function exportVideo({
             // centered in a growing window (clipTop..clipTop+clipHeight), showing
             // the current pan/zoom view of the source.
             for (const im of media.images) {
-                if (im.clipH <= 0) continue;
+                if (im.clipW <= 0 || im.clipH <= 0) continue;
                 const it = im.item;
                 const isVideo = it.type === 'video';
                 const el = isVideo ? preloadedMediaVideos[it.src] : preloadedMediaImages[it.src];
@@ -336,16 +336,16 @@ export async function exportVideo({
                     if (vidDur > 0) vt = clamp(vt, 0, vidDur - 0.03);
                     await seekVideoTo(el, vt);
                 }
-                const { centerY, boxW, boxH, clipW, clipH, opacity } = im;
+                const { boxW, boxH, drawCX, drawCY, clipX, clipY, clipW, clipH, opacity } = im;
                 const view = sampleKeyframes(it.keyframes, mediaLocalProgress(it, currentTimeMs / 1000), it.crop);
                 const { sx, sy, sw, sh } = composeCropView(natW, natH, it.crop, view);
                 const radius = it.borderRadius ?? MEDIA_IMAGE_RADIUS;
                 ctx.save();
                 ctx.globalAlpha = opacity;
-                // Clip to the (rounded) shared frame, then draw the source filling the box.
-                roundRectPath(ctx, 540 - clipW / 2, centerY - clipH / 2, clipW, clipH, Math.min(radius, clipH / 2, clipW / 2));
+                // Clip to the (rounded) frame, then draw the source cover-filling the box.
+                roundRectPath(ctx, clipX, clipY, clipW, clipH, Math.min(radius, clipH / 2, clipW / 2));
                 ctx.clip();
-                ctx.drawImage(el, sx, sy, sw, sh, 540 - boxW / 2, centerY - boxH / 2, boxW, boxH);
+                ctx.drawImage(el, sx, sy, sw, sh, drawCX - boxW / 2, drawCY - boxH / 2, boxW, boxH);
                 ctx.restore();
             }
 
@@ -630,7 +630,7 @@ export async function exportVideo({
             ctx.fillStyle = videoBgColor || '#050505';
             const keep = [[bandTop, bandTop + bandH]];
             for (const im of media.images) {
-                if (im.clipH > 0) keep.push([im.centerY - im.clipH / 2, im.centerY + im.clipH / 2]);
+                if (im.clipH > 0) keep.push([im.clipY, im.clipY + im.clipH]);
             }
             keep.sort((a, b) => a[0] - b[0]);
             const merged = [];
