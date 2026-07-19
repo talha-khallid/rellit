@@ -1,13 +1,13 @@
 import React, { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EditorContext } from '../context/EditorContext';
-import { editToKeeps, editedDuration } from '../utils/audioData';
+import { editToKeeps, editedDuration, getEditedBuffer } from '../utils/audioData';
 
 // Double-clicking an audio clip opens this: a big, zoomable, playable waveform
 // where you trim the start/end and cut out middle sections. The edit is stored
 // non-destructively on the segment (`audioEdit`); the clip stays ONE block on the
 // main timeline while playback/export use the spliced result.
 export const AudioTrimModal = ({ segIdx, onClose }) => {
-    const { segments, setSegments, getAudioCtx } = useContext(EditorContext);
+    const { segments, setSegments, getAudioCtx, visualLines, lineSettings, setLineSettings } = useContext(EditorContext);
     const seg = segments[segIdx];
     const buffer = seg && seg.audioBuffer && typeof seg.audioBuffer.getChannelData === 'function' ? seg.audioBuffer : null;
     const dur = buffer ? buffer.duration : 0;
@@ -29,7 +29,47 @@ export const AudioTrimModal = ({ segIdx, onClose }) => {
     const playRef = useRef(null);                  // { src, ctxStart, audioStart }
     const H = 150;
 
-    const commit = (next) => setSegments(prev => prev.map((s, i) => i === segIdx ? { ...s, audioEdit: next } : s));
+    // Shrink/grow ONLY this segment's caption lines so they sum to the edited audio
+    // length. This makes trimming actually SHORTEN the clip (removing the removed
+    // audio, pulling later content earlier) instead of leaving a same-length block
+    // with silent gaps. Proportional, so the lines keep their relative pacing.
+    const redistribute = (ed) => {
+        const idxs = [];
+        visualLines.forEach((line, i) => { if (line[0]?.segIndex === segIdx) idxs.push(i); });
+        if (!idxs.length) return;
+        setLineSettings(prev => {
+            const cur = idxs.map(i => parseFloat(prev[i]?.duration || 0));
+            const total = cur.reduce((a, b) => a + b, 0);
+            const next = { ...prev };
+            if (total <= 0) {
+                idxs.forEach(i => { next[i] = { ...(next[i] || { color: '#ffffff' }), duration: (ed / idxs.length).toFixed(2) }; });
+            } else {
+                let acc = 0;
+                idxs.forEach((i, k) => {
+                    let d = Math.round((cur[k] / total) * ed * 100) / 100;
+                    if (d < 0.1) d = 0.1;
+                    next[i] = { ...(next[i] || { color: '#ffffff' }), duration: d.toFixed(2) };
+                    acc += parseFloat(next[i].duration);
+                });
+                const diff = ed - acc;
+                if (Math.abs(diff) > 0.001) {
+                    const last = idxs[idxs.length - 1];
+                    let c = parseFloat(next[last].duration) + diff;
+                    if (c < 0.1) c = 0.1;
+                    next[last] = { ...next[last], duration: c.toFixed(2) };
+                }
+            }
+            return next;
+        });
+    };
+
+    const commit = (next) => {
+        // Store only the edit (audioDuration stays the TRUE original so the edit
+        // math is stable). Shrinking the caption lines to the edited length happens
+        // here for instant feedback, and via enforceSegmentAudioConstraints on load.
+        setSegments(prev => prev.map((s, i) => i === segIdx ? { ...s, audioEdit: next } : s));
+        redistribute(editedDuration(next, dur));
+    };
     const setStart = (v) => commit({ start: Math.min(Math.max(0, v), end - 0.02), end, cuts });
     const setEnd = (v) => commit({ start, end: Math.max(Math.min(dur, v), start + 0.02), cuts });
     const addCut = (a, b) => { const lo = Math.max(start, Math.min(a, b)), hi = Math.min(end, Math.max(a, b)); if (hi - lo > 0.01) commit({ start, end, cuts: [...cuts, [lo, hi]] }); };
@@ -93,39 +133,44 @@ export const AudioTrimModal = ({ segIdx, onClose }) => {
         }
     }, [buffer, pxW, view, start, end, cuts, sel]);
 
-    // ---- playback ----
-    const stopPlay = (finalTime) => {
+    // ---- playback (plays the EDITED result; the playhead maps back onto the
+    //      source waveform so it visibly SKIPS the trimmed/cut regions) ----
+    const keeps = editToKeeps({ start, end, cuts }, dur);
+    const editedTotal = keeps.reduce((a, [s, e]) => a + (e - s), 0);
+    const srcToEdited = (T) => { let acc = 0; for (const [ks, ke] of keeps) { if (T < ks) return acc; if (T <= ke) return acc + (T - ks); acc += ke - ks; } return acc; };
+    const editedToSrc = (E) => { let acc = 0; for (const [ks, ke] of keeps) { const len = ke - ks; if (E <= acc + len) return ks + (E - acc); acc += len; } return keeps.length ? keeps[keeps.length - 1][1] : 0; };
+
+    const stopPlay = (finalSrc) => {
         if (playRef.current) { try { playRef.current.src.stop(); } catch (e) { } playRef.current = null; }
-        if (typeof finalTime === 'number') setHead(Math.min(Math.max(0, finalTime), dur));
+        if (typeof finalSrc === 'number') setHead(Math.min(Math.max(0, finalSrc), dur));
         setPlaying(false);
     };
-    const startPlay = (from) => {
-        if (!buffer) return;
+    const startPlay = (fromSrc) => {
+        if (!buffer || editedTotal <= 0.01) return;
         const ctx = getAudioCtx();
         if (ctx.state === 'suspended') ctx.resume();
         if (playRef.current) { try { playRef.current.src.stop(); } catch (e) { } }
+        const edited = getEditedBuffer(ctx, buffer, { start, end, cuts });
         const src = ctx.createBufferSource();
-        src.buffer = buffer; src.connect(ctx.destination);
-        const at = Math.min(Math.max(0, from), dur - 0.01);
-        src.start(0, at);
-        src.onended = () => { if (playRef.current && playRef.current.src === src) stopPlay(dur); };
-        playRef.current = { src, ctxStart: ctx.currentTime, audioStart: at };
+        src.buffer = edited; src.connect(ctx.destination);
+        let eAt = srcToEdited(Math.min(Math.max(0, fromSrc), dur));
+        if (eAt >= editedTotal - 0.02) eAt = 0;                 // at the end → play from the top
+        src.start(0, Math.min(eAt, edited.duration - 0.005));
+        src.onended = () => { if (playRef.current && playRef.current.src === src) stopPlay(end); };
+        playRef.current = { src, ctxStart: ctx.currentTime, editedStart: eAt };
         setPlaying(true);
     };
-    const togglePlay = () => { if (playing) { const t = curPlayTime(); stopPlay(t); } else startPlay(head); };
-    const curPlayTime = () => {
-        if (!playRef.current) return head;
-        const ctx = getAudioCtx();
-        return playRef.current.audioStart + (ctx.currentTime - playRef.current.ctxStart);
-    };
+    const curEdited = () => { if (!playRef.current) return srcToEdited(head); const ctx = getAudioCtx(); return playRef.current.editedStart + (ctx.currentTime - playRef.current.ctxStart); };
+    const curPlayTime = () => editedToSrc(curEdited());        // source seconds (for display / head)
+    const togglePlay = () => { if (playing) stopPlay(curPlayTime()); else startPlay(head); };
 
     // Animate the playhead while playing (DOM-only, no re-render).
     useEffect(() => {
         if (!playing) return;
         let raf;
         const loop = () => {
+            if (curEdited() >= editedTotal) { stopPlay(end); return; }
             const t = curPlayTime();
-            if (t >= dur) { stopPlay(dur); return; }
             if (playheadRef.current) {
                 const x = timeToX(t);
                 const vis = t >= view.s && t <= view.e;

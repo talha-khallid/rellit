@@ -2,6 +2,7 @@ import React, { useContext, useRef, useState, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { AudioWaveform } from '../components/AudioWaveform';
 import { AudioTrimModal } from '../components/AudioTrimModal';
+import { getEditedBuffer } from '../utils/audioData';
 import { clampMediaWindow, keyframeAt, newKeyframe, sampleKeyframes, clamp, MEDIA_MIN_GAP_SEC, MEDIA_TRANSITION_TYPES, getItemTransition } from '../utils/mediaLayout';
 
 export const Timeline = () => {
@@ -17,7 +18,8 @@ export const Timeline = () => {
         activeMediaId,
         setActiveTab,
         cropModalMediaId, setCropModalMediaId,
-        selectedKeyframeId, setSelectedKeyframeId
+        selectedKeyframeId, setSelectedKeyframeId,
+        getAudioCtx
     } = useContext(EditorContext);
 
     const [isResizing, setIsResizing] = useState(false);
@@ -603,7 +605,7 @@ export const Timeline = () => {
                                         onDoubleClick={(e) => { e.stopPropagation(); if (isPlaying) togglePlayback(); setAudioModalSegIdx(ab.index); }}
                                     >
                                         <AudioWaveform
-                                            audioBuffer={ab.audioBuffer}
+                                            audioBuffer={getEditedBuffer(getAudioCtx(), ab.audioBuffer, segments[ab.index]?.audioEdit)}
                                             width={blockWidth}
                                             height={28}
                                         />

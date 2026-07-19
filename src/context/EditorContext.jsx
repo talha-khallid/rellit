@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { loadProject, saveProjectData, updateProjectName } from '../utils/storage';
-import { decodeStoredAudio } from '../utils/audioData';
+import { decodeStoredAudio, editedDuration } from '../utils/audioData';
 
 export const EditorContext = createContext();
 
@@ -252,6 +252,10 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
             const segIdx = parseInt(segIdxStr);
             const seg = currentSegments[segIdx];
             if (seg && seg.audioDuration !== null && seg.audioDuration !== undefined) {
+                // Trimming/cutting the audio (audioEdit) shortens the segment: its
+                // caption lines are sized to the EDITED audio length, so a trim
+                // actually shrinks the clip instead of leaving silence.
+                const targetDur = seg.audioEdit ? editedDuration(seg.audioEdit, seg.audioDuration) : seg.audioDuration;
                 const lines = segLines[segIdx];
                 let currentTotal = 0;
                 const durs = lines.map(lineIdx => {
@@ -259,24 +263,24 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
                     currentTotal += d;
                     return d;
                 });
-                
+
                 if (currentTotal <= 0) {
-                    lines.forEach(lineIdx => { 
-                        newLineSettings[lineIdx].duration = (seg.audioDuration / lines.length).toFixed(2); 
+                    lines.forEach(lineIdx => {
+                        newLineSettings[lineIdx].duration = (targetDur / lines.length).toFixed(2);
                     });
                     continue;
                 }
 
                 let newTotal = 0;
                 lines.forEach((lineIdx, i) => {
-                    let newDur = (durs[i] / currentTotal) * seg.audioDuration;
+                    let newDur = (durs[i] / currentTotal) * targetDur;
                     newDur = Math.round(newDur * 100) / 100;
                     if (newDur < 0.1) newDur = 0.1;
                     newLineSettings[lineIdx].duration = newDur.toFixed(2);
                     newTotal += parseFloat(newLineSettings[lineIdx].duration);
                 });
 
-                const diff = seg.audioDuration - newTotal;
+                const diff = targetDur - newTotal;
                 if (Math.abs(diff) > 0.001) {
                     let lastIdx = lines[lines.length - 1];
                     let lastDur = parseFloat(newLineSettings[lastIdx].duration);
