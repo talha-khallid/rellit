@@ -3,6 +3,8 @@ import { EditorContext } from '../context/EditorContext';
 import { CustomColorPicker } from '../components/CustomColorPicker';
 import { ComponentCreator } from '../components/ComponentCreator';
 import { MediaLibrary } from '../components/MediaLibrary';
+import { FooterPanel } from '../components/FooterPanel';
+import { HeaderPanel } from '../components/HeaderPanel';
 import { arrayBufferToBase64 } from '../utils/audioData';
 
 // --- Dynamic Waveform Component ---
@@ -490,6 +492,10 @@ export const SidebarLeft = () => {
                     <ComponentCreator />
                 ) : activeTab === 'bigMedia' ? (
                     <MediaLibrary />
+                ) : activeTab === 'footer' ? (
+                    <FooterPanel />
+                ) : activeTab === 'header' ? (
+                    <HeaderPanel />
                 ) : null}
             </div>
         </div>

@@ -1,6 +1,8 @@
 import * as Mp4Muxer from 'mp4-muxer';
 import { hexToRgb } from './colorUtils';
 import { getEditedBuffer } from './audioData';
+import { drawFooter } from './footer';
+import { drawHeader } from './header';
 import { getMediaLayout, composeCropView, sampleKeyframes, mediaLocalProgress, clamp, MEDIA_IMAGE_RADIUS } from './mediaLayout';
 
 // Seek a <video> to a time and resolve once the frame is ready to draw. Has a
@@ -36,6 +38,8 @@ export async function exportVideo({
     charsData,
     imagesData = [],
     mediaItems = [],
+    footerItems = [],
+    headerItems = [],
     fpsInput,
     scrollBox,
     setProgress,
@@ -655,6 +659,12 @@ export async function exportVideo({
                 y = Math.max(y, e);
             }
             if (y < 1920) ctx.fillRect(0, y, 1080, 1920 - y);
+
+            // Footer overlays on top of everything (same draw as the live preview).
+            drawFooter(ctx, footerItems, totalDuration > 0 ? (currentTimeMs / 1000) / totalDuration : 0);
+            // Header overlay (top title) — responsive to the caption band top, same
+            // draw as the live preview. bandTop is this frame's caption band top.
+            drawHeader(ctx, headerItems, bandTop, fontFamily);
 
             const videoFrame = new VideoFrame(offscreenCanvas, { timestamp: currentTimeMs * 1000 });
             videoEncoder.encode(videoFrame, { keyFrame: frame % 30 === 0 });

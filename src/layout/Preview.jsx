@@ -2,6 +2,8 @@ import React, { useContext, useEffect, useRef, useLayoutEffect, useState } from 
 import { EditorContext } from '../context/EditorContext';
 import { getBehaviors, newComponentDefaults } from '../utils/componentStyle';
 import { getEditedBuffer } from '../utils/audioData';
+import { drawFooter } from '../utils/footer';
+import { drawHeader } from '../utils/header';
 import { MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_WIDTH, MEDIA_MAX_ZOOM, getMediaLayout, getActiveMediaItem, sampleKeyframes, mediaElementBox, mediaLocalProgress, keyframeAt, normalizeKeyframe, newKeyframe, clamp, defaultView, normalizeCrop, minViewScale } from '../utils/mediaLayout';
 
 export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
@@ -22,7 +24,8 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         customComponents, setCustomComponents, setSegments,
         armedComponentId, setArmedComponentId,
         mediaItems, setMediaItems, activeMediaId, setActiveMediaId,
-        selectedMediaId, setSelectedKeyframeId
+        selectedMediaId, setSelectedKeyframeId,
+        footerItems, headerItems
     } = useContext(EditorContext);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -56,6 +59,17 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const mediaBoxRefs = useRef({});
     const mediaWindowRefs = useRef({});
     const mediaSlotRef = useRef(null);
+    // Footer overlay: a 1080x1920 canvas drawn each frame with the SAME drawFooter
+    // the export uses, so preview and export match. totalDurationRef feeds the
+    // progress bars their completion (currentTime / total).
+    const footerCanvasRef = useRef(null);
+    const totalDurationRef = useRef(0);
+    // Header overlay: a 1080x1920 canvas drawn each frame with the SAME drawHeader
+    // the export uses. captionBandTopRef is updated by the media rAF loop below
+    // (bandTop = captionCenterY - captionHeight/2) so the header can rise/hide in
+    // response to the captions being pushed up by big media.
+    const headerCanvasRef = useRef(null);
+    const captionBandTopRef = useRef(960);
 
     // Always hand the re-measurement the LATEST line durations. lineSettings is
     // intentionally kept out of the measure effect's deps (adding it would loop),
@@ -542,6 +556,9 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
             // caption band height, the single media slot (which shifts the caption up
             // via the flex column), and each media box's cross-fade per-frame.
             const layout = getMediaLayout(mediaItems, t, fontSize, videoAlignPercent);
+            // Caption band top for this frame — feeds the responsive header (matches
+            // the export's `bandTop`).
+            captionBandTopRef.current = layout.captionCenterY - layout.captionHeight / 2;
             if (scrollContainerRef.current) scrollContainerRef.current.style.height = layout.captionHeight + 'px';
             if (mediaSlotRef.current) {
                 mediaSlotRef.current.style.height = layout.slotHeight + 'px';
@@ -603,6 +620,49 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         return () => cancelAnimationFrame(raf);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [mediaItems, isPlaying, fontSize, videoAlignPercent, currentTimeRef]);
+
+    // Keep the total duration fresh for the footer progress bars.
+    useEffect(() => { totalDurationRef.current = getTotalDuration(); }, [visualLines, lineSettings]);
+
+    // Draw the footer overlay each frame (progress = playback completion). Uses the
+    // exact same drawFooter as the export, so what you see is what you get.
+    useEffect(() => {
+        let raf;
+        const loop = () => {
+            const canvas = footerCanvasRef.current;
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, 1080, 1920);
+                const td = totalDurationRef.current;
+                const prog = td > 0 ? clamp(currentTimeRef.current / td, 0, 1) : 0;
+                drawFooter(ctx, footerItems, prog);
+            }
+            raf = requestAnimationFrame(loop);
+        };
+        raf = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(raf);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [footerItems]);
+
+    // Draw the header overlay each frame. It reads the current caption band top
+    // (kept fresh by the media rAF loop) so the title rises with the captions and
+    // slides away when there's no room — using the exact same drawHeader as the
+    // export, so preview and export match.
+    useEffect(() => {
+        let raf;
+        const loop = () => {
+            const canvas = headerCanvasRef.current;
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, 1080, 1920);
+                drawHeader(ctx, headerItems, captionBandTopRef.current, fontFamily);
+            }
+            raf = requestAnimationFrame(loop);
+        };
+        raf = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(raf);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [headerItems, fontFamily]);
 
     // ---- Direct manipulation of a big image's pan/zoom on the preview --------
     // When a big image is selected and paused, dragging it pans and scrolling
@@ -1402,6 +1462,25 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
                         })}
                         </div>
                         </div>
+
+                        {/* Footer overlays (progress bar, handle, …) — a 1080x1920 canvas
+                            drawn every frame with the same drawFooter the export uses. */}
+                        <canvas
+                            ref={footerCanvasRef}
+                            width={1080}
+                            height={1920}
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 6 }}
+                        />
+
+                        {/* Header overlay (top title) — its own 1080x1920 canvas drawn every
+                            frame with the same drawHeader the export uses. Responsive to the
+                            caption band top so it rises/hides as media pushes captions up. */}
+                        <canvas
+                            ref={headerCanvasRef}
+                            width={1080}
+                            height={1920}
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 7 }}
+                        />
                     </div>
                 </div>
             </div>

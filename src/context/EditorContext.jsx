@@ -99,6 +99,15 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
     const [customComponents, setCustomComponents] = useState([]);
     const [armedComponentId, setArmedComponentId] = useState(null);
 
+    // Footer overlays (progress bar, handle, …) pinned at the bottom of the video.
+    const [footerItems, setFooterItems] = useState([]);
+    const [selectedFooterId, setSelectedFooterId] = useState(null);
+
+    // Header overlays (title / label) pinned near the top — responsive to the
+    // caption block below (rises + hides when big media pushes captions up).
+    const [headerItems, setHeaderItems] = useState([]);
+    const [selectedHeaderId, setSelectedHeaderId] = useState(null);
+
     // Big (scene) images — full-width photos that sit behind the captions
     const [mediaItems, setMediaItems] = useState([]);
     const [selectedMediaId, setSelectedMediaId] = useState(null);
@@ -170,6 +179,10 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
             setLineSettings(data.lineSettings || {});
             setCharOverrides(data.charOverrides || {});
             setMediaItems(data.mediaItems || []);
+            setFooterItems(data.footerItems || []);
+            setSelectedFooterId(null);
+            setHeaderItems(data.headerItems || []);
+            setSelectedHeaderId(null);
             setSelectedMediaId(null);
             setActiveMediaId(null);
             setCropModalMediaId(null);
@@ -222,7 +235,9 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
                 visualLines: visualLines.map(line => line.map(({ el: _el, ...rest }) => rest)),
                 lineSettings,
                 charOverrides,
-                mediaItems
+                mediaItems,
+                footerItems,
+                headerItems
             })
                 .then(() => setSaveStatus('saved'))
                 .catch(err => {
@@ -236,7 +251,7 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
         projectId, segments, videoBgColor, videoAlignPercent,
         fontFamily, fontWeight, textTransform, fontSize, textAlign, letterSpacing,
         timelineScale, customComponents, visualLines, lineSettings, charOverrides,
-        mediaItems
+        mediaItems, footerItems, headerItems
     ]);
 
     // Helper: Enforce Audio constraints
@@ -361,6 +376,10 @@ export const EditorProvider = ({ children, projectId, onGoHome }) => {
         customComponents, setCustomComponents,
         armedComponentId, setArmedComponentId,
         mediaItems, setMediaItems,
+        footerItems, setFooterItems,
+        selectedFooterId, setSelectedFooterId,
+        headerItems, setHeaderItems,
+        selectedHeaderId, setSelectedHeaderId,
         selectedMediaId, setSelectedMediaId,
         activeMediaId, setActiveMediaId,
         cropModalMediaId, setCropModalMediaId,

@@ -2276,3 +2276,23 @@ label.switch-row {
     transform: scale(1) !important;
     transition: none !important;
 }
+
+/* --- Footer panel controls --- */
+.footer-add-row { display: flex; gap: 8px; }
+.footer-add-row .btn-ghost { margin-top: 0; }
+.seg-btns { display: flex; gap: 4px; }
+.seg-btn {
+    flex: 1;
+    font-size: 12px;
+    padding: 6px 4px;
+    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--bg-input);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+    font-family: inherit;
+    white-space: nowrap;
+}
+.seg-btn:hover { color: #fff; border-color: #3d3d44; }
+.seg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }

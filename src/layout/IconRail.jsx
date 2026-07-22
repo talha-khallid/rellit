@@ -49,6 +49,28 @@ const TABS = [
                 <polyline points="21 15 16 10 5 21"></polyline>
             </svg>
         )
+    },
+    {
+        id: 'header',
+        label: 'Header',
+        title: 'Top title — responsive to the captions below',
+        icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                <line x1="6" y1="8" x2="14" y2="8"></line>
+            </svg>
+        )
+    },
+    {
+        id: 'footer',
+        label: 'Footer',
+        title: 'Bottom overlays — progress bar, handle & more',
+        icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                <line x1="6" y1="17" x2="14" y2="17"></line>
+            </svg>
+        )
     }
 ];
 

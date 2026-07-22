@@ -19,7 +19,9 @@ export const Topbar = ({ scrollBox, charsData, imagesData }) => {
         projectName,
         updateName,
         saveStatus,
-        mediaItems
+        mediaItems,
+        footerItems,
+        headerItems
     } = useContext(EditorContext);
 
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -77,6 +79,8 @@ export const Topbar = ({ scrollBox, charsData, imagesData }) => {
             charsData,
             imagesData,
             mediaItems,
+            footerItems,
+            headerItems,
             fpsInput: exportFps,
             scrollBox,
             videoBgColor,
