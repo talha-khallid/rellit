@@ -1,8 +1,48 @@
-import React, { useContext, useRef } from 'react';
+import React, { useContext, useRef, useState, useEffect } from 'react';
 import { EditorContext } from '../context/EditorContext';
 import { CroppedMedia } from './CroppedMedia';
 import { MediaCropModal } from './MediaCropModal';
 import { clampMediaWindow, newMediaItemDefaults, cropOutputBox, keyframeAt, newKeyframe, normalizeKeyframe, sampleKeyframes, clamp, MEDIA_MAX_ZOOM, minViewScale } from '../utils/mediaLayout';
+
+// A free-form video-speed input (no fixed presets). The value is buffered locally
+// so typing "1.5" doesn't rescale the clip on every keystroke; it commits on blur
+// or Enter. The hint shows the resulting on-timeline length live as you type —
+// source length is fixed, so faster speed ⇒ shorter clip.
+const VideoSpeedField = ({ item, onCommit }) => {
+    const speed = item.speed || 1;
+    const [draft, setDraft] = useState(String(speed));
+    useEffect(() => { setDraft(String(item.speed || 1)); }, [item.speed]);
+
+    const commit = () => {
+        const v = parseFloat(draft);
+        if (!isFinite(v) || v <= 0) { setDraft(String(item.speed || 1)); return; }
+        onCommit(v);
+    };
+
+    const sourceLen = item.duration * speed;                 // source seconds shown (invariant)
+    const draftSpeed = parseFloat(draft);
+    const validDraft = isFinite(draftSpeed) && draftSpeed > 0;
+    const previewLen = validDraft ? sourceLen / clamp(draftSpeed, 0.1, 16) : item.duration;
+
+    return (
+        <div className="field">
+            <label>Speed (×)</label>
+            <input
+                type="number" step="0.05" min="0.1" max="16" className="panel-input"
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                onBlur={commit}
+                onKeyDown={e => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                    else if (e.key === 'Escape') { setDraft(String(item.speed || 1)); e.currentTarget.blur(); }
+                }}
+            />
+            <p className="motion-hint" style={{ marginTop: 6 }}>
+                {sourceLen.toFixed(1)}s of video → plays as <b>{previewLen.toFixed(1)}s</b> at {validDraft ? +draftSpeed.toFixed(2) : speed}× speed
+            </p>
+        </div>
+    );
+};
 
 export const MediaLibrary = () => {
     const {
@@ -54,7 +94,7 @@ export const MediaLibrary = () => {
             const newItem = {
                 id, ...newMediaItemDefaults('video'),
                 src, start, duration, width: box.width, height: box.height,
-                videoDuration: vidDur, trimStart: 0, audioEnabled: false
+                videoDuration: vidDur, trimStart: 0, audioEnabled: false, speed: 1
             };
             setMediaItems(prev => [...prev, newItem]);
             setSelectedMediaId(id);
@@ -99,12 +139,15 @@ export const MediaLibrary = () => {
                     if (m.id !== id) return m;
                     const box = cropOutputBox(natW, natH, m.crop);
                     const wasVideo = m.type === 'video';
+                    const speed = wasVideo ? (m.speed || 1) : 1;
                     const trimStart = wasVideo ? clamp(m.trimStart || 0, 0, Math.max(0, vidDur - 0.1)) : 0;
                     return {
                         ...m, type: 'video', src: dataUrl,
                         width: box.width, height: box.height,
-                        videoDuration: vidDur, trimStart,
-                        duration: Math.max(0.2, Math.min(m.duration, vidDur - trimStart)),
+                        videoDuration: vidDur, trimStart, speed,
+                        // Cap timeline length to the source available at this speed
+                        // (source consumed = duration × speed).
+                        duration: Math.max(0.2, Math.min(m.duration, (vidDur - trimStart) / speed)),
                         audioEnabled: wasVideo ? !!m.audioEnabled : false
                     };
                 }));
@@ -157,6 +200,22 @@ export const MediaLibrary = () => {
         const totalTime = getTotalTime();
         const { start, duration } = clampMediaWindow(mediaItems, id, newStart, newDuration, totalTime);
         setMediaItems(mediaItems.map(m => m.id === id ? { ...m, start, duration } : m));
+    };
+
+    // Change a video's playback speed while keeping the SAME slice of source in
+    // play: source consumed = duration × speed, so holding that constant means the
+    // on-timeline length becomes (source / newSpeed). Faster ⇒ shorter clip. The
+    // result is re-clamped against the timeline/neighbours, so the length shown is
+    // the real one.
+    const changeSpeed = (id, rawSpeed) => {
+        const newSpeed = clamp(Number(rawSpeed) || 1, 0.1, 16);
+        const item = mediaItems.find(m => m.id === id);
+        if (!item) return;
+        const oldSpeed = item.speed || 1;
+        const sourceLen = item.duration * oldSpeed;              // source seconds shown
+        const totalTime = getTotalTime();
+        const { start, duration } = clampMediaWindow(mediaItems, id, item.start, sourceLen / newSpeed, totalTime);
+        setMediaItems(mediaItems.map(m => m.id === id ? { ...m, speed: newSpeed, start, duration } : m));
     };
 
     // Edits from the media popup. A duration change (trim) must be re-fit against
@@ -331,6 +390,10 @@ export const MediaLibrary = () => {
                                         <button className="btn-ghost" style={{ height: 34, width: '100%' }} onClick={() => setCropModalMediaId(item.id)}>
                                             {item.type === 'video' ? 'Crop & trim' : 'Crop & style'}
                                         </button>
+
+                                        {item.type === 'video' && (
+                                            <VideoSpeedField item={item} onCommit={(v) => changeSpeed(item.id, v)} />
+                                        )}
 
                                         {item.type === 'video' && (
                                             <label className="switch-row">

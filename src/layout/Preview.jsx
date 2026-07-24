@@ -4,7 +4,7 @@ import { getBehaviors, newComponentDefaults } from '../utils/componentStyle';
 import { getEditedBuffer } from '../utils/audioData';
 import { drawFooter } from '../utils/footer';
 import { drawHeader } from '../utils/header';
-import { MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_WIDTH, MEDIA_MAX_ZOOM, getMediaLayout, getActiveMediaItem, sampleKeyframes, mediaElementBox, mediaLocalProgress, keyframeAt, normalizeKeyframe, newKeyframe, clamp, defaultView, normalizeCrop, minViewScale } from '../utils/mediaLayout';
+import { MEDIA_IMAGE_RADIUS, MEDIA_IMAGE_WIDTH, MEDIA_MAX_ZOOM, getMediaLayout, getActiveMediaItem, sampleKeyframes, mediaElementBox, mediaLocalProgress, mediaSpeed, keyframeAt, normalizeKeyframe, newKeyframe, clamp, defaultView, normalizeCrop, minViewScale } from '../utils/mediaLayout';
 
 export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
     const { 
@@ -530,13 +530,18 @@ export const Preview = ({ setScrollBox, setCharsData, setImagesData }) => {
         if (!active) { if (!v.paused) v.pause(); return; }
         const vidDur = item.videoDuration || v.duration || 0;
         const trimStart = item.trimStart || 0;
-        // Source time = trim offset + how far we are into the block.
+        const speed = mediaSpeed(item);
+        // Source time = trim offset + how far we are into the block × speed.
         const rel = Math.min(Math.max(t - item.start, 0), item.duration);
-        let target = trimStart + rel;
+        let target = trimStart + rel * speed;
         if (vidDur > 0) target = Math.min(target, vidDur - 0.03);
+        // Play the element at `speed` so it advances at the right rate between the
+        // coarse re-seeks below; pitch-shift so audio matches the export's resample.
+        if (v.playbackRate !== speed) v.playbackRate = speed;
+        if ('preservesPitch' in v && v.preservesPitch) v.preservesPitch = false;
         if (isPlaying) {
             if (v.paused) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
-            if (Math.abs(v.currentTime - target) > 0.25) { try { v.currentTime = target; } catch (e) { /* seek race */ } }
+            if (Math.abs(v.currentTime - target) > 0.25 * Math.max(1, speed)) { try { v.currentTime = target; } catch (e) { /* seek race */ } }
         } else {
             if (!v.paused) v.pause();
             if (Math.abs(v.currentTime - target) > 0.03) { try { v.currentTime = target; } catch (e) { /* seek race */ } }

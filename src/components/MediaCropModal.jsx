@@ -88,16 +88,22 @@ export const MediaCropModal = ({ item, editingDuration = 0, initialTab = 'crop',
     const [vidDur, setVidDur] = useState(item.videoDuration || 0);
     const [playing, setPlaying] = useState(false);
 
-    const maxLen = Math.min(editingDuration || vidDur || 0, vidDur || 0) || (item.videoDuration || 0);
+    // The trim window is in SOURCE seconds. With a playback speed, the source slice
+    // (length here) becomes a shorter/longer clip on the timeline: clipLen = len /
+    // speed, so the stored `duration` (timeline seconds) = len / speed and, reading
+    // back, len = duration × speed. maxLen is a source cap: the clip can't exceed
+    // the caption timeline (⇒ editingDuration × speed of source) or the video itself.
+    const speed = isVideo ? (item.speed || 1) : 1;
+    const maxLen = Math.min(editingDuration > 0 ? editingDuration * speed : (vidDur || 0), vidDur || 0) || (item.videoDuration || 0);
     const minLen = Math.min(0.5, maxLen || 0.5);
 
-    const [draftTrim, setDraftTrim] = useState({ start: item.trimStart || 0, len: item.duration || 0 });
+    const [draftTrim, setDraftTrim] = useState({ start: item.trimStart || 0, len: (item.duration || 0) * speed });
     const draftTrimRef = useRef(draftTrim);
     useEffect(() => {
-        const nt = { start: item.trimStart || 0, len: item.duration || 0 };
+        const nt = { start: item.trimStart || 0, len: (item.duration || 0) * speed };
         draftTrimRef.current = nt;
         setDraftTrim(nt);
-    }, [item.trimStart, item.duration]);
+    }, [item.trimStart, item.duration, speed]);
 
     const trimStart = clamp(draftTrim.start, 0, Math.max(0, vidDur - minLen));
     const length = clamp(draftTrim.len || maxLen, minLen, Math.max(minLen, Math.min(maxLen, vidDur - trimStart)));
@@ -111,8 +117,8 @@ export const MediaCropModal = ({ item, editingDuration = 0, initialTab = 'crop',
         draftTrimRef.current = nt;
         setDraftTrim(nt);
     };
-    const commitTrim = () => { const { start, len } = draftTrimRef.current; onChange({ trimStart: start, duration: len }); };
-    const applyTrim = (start, len) => { setTrimDraft(start, len); const t = draftTrimRef.current; onChange({ trimStart: t.start, duration: t.len }); };
+    const commitTrim = () => { const { start, len } = draftTrimRef.current; onChange({ trimStart: start, duration: len / speed }); };
+    const applyTrim = (start, len) => { setTrimDraft(start, len); const t = draftTrimRef.current; onChange({ trimStart: t.start, duration: t.len / speed }); };
 
     const trimDragRef = useRef(null);
     const [trimDragging, setTrimDragging] = useState(false);
@@ -283,7 +289,9 @@ export const MediaCropModal = ({ item, editingDuration = 0, initialTab = 'crop',
                                     : <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>}
                             </button>
                             <span className="trim-time" ref={timeTextRef}>0.0s</span>
-                            <span className="trim-sel">Selected {length.toFixed(1)}s · max {maxLen.toFixed(1)}s</span>
+                            <span className="trim-sel">
+                                Selected {length.toFixed(1)}s{speed !== 1 ? ` → ${(length / speed).toFixed(1)}s @ ${+speed.toFixed(2)}×` : ''} · max {maxLen.toFixed(1)}s
+                            </span>
                         </div>
 
                         <div className="trim-track" ref={trackRef} onMouseDown={seekTrack}>

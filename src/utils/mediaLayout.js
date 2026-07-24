@@ -246,6 +246,15 @@ export const mediaLocalProgress = (item, timeSec) => {
     return clamp((timeSec - item.start) / item.duration, 0, 1);
 };
 
+// Playback speed for a video item. `speed` fast-forwards the source: at 2x, one
+// timeline second advances TWO source seconds, so a clip plays in half the source
+// length. Sanitised to a finite positive number (default 1). Both the preview and
+// the export map source time as: sourceTime = trimStart + timelineRel * speed.
+export const mediaSpeed = (item) => {
+    const s = Number(item?.speed);
+    return isFinite(s) && s > 0 ? s : 1;
+};
+
 export const newKeyframe = (t = 0, view, crop) => ({
     id: `kf_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     t: clamp(t, 0, 1),

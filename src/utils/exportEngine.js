@@ -3,7 +3,7 @@ import { hexToRgb } from './colorUtils';
 import { getEditedBuffer } from './audioData';
 import { drawFooter } from './footer';
 import { drawHeader } from './header';
-import { getMediaLayout, composeCropView, sampleKeyframes, mediaLocalProgress, clamp, MEDIA_IMAGE_RADIUS } from './mediaLayout';
+import { getMediaLayout, composeCropView, sampleKeyframes, mediaLocalProgress, mediaSpeed, clamp, MEDIA_IMAGE_RADIUS } from './mediaLayout';
 
 // Seek a <video> to a time and resolve once the frame is ready to draw. Has a
 // safety timeout so a missed 'seeked' event can't stall the whole export.
@@ -346,7 +346,7 @@ export async function exportVideo({
                     const vidDur = it.videoDuration || el.duration || 0;
                     const trimStart = it.trimStart || 0;
                     const rel = Math.min(Math.max((currentTimeMs / 1000) - it.start, 0), it.duration);
-                    let vt = trimStart + rel;
+                    let vt = trimStart + rel * mediaSpeed(it);
                     if (vidDur > 0) vt = clamp(vt, 0, vidDur - 0.03);
                     await seekVideoTo(el, vt);
                 }
@@ -688,12 +688,28 @@ export async function exportVideo({
                 const masterL = new Float32Array(masterFrames);
                 const masterR = new Float32Array(masterFrames);
 
-                const mixIn = (buf, destStartFrame, srcStartFrame, maxFrames) => {
+                // `rate` time-stretches the source: dest frame i reads source frame
+                // srcStart + i*rate (linear interp). rate>1 speeds up (and pitch-
+                // shifts, matching the preview's preservesPitch=false). `maxFrames` is
+                // always a count of DEST frames written.
+                const mixIn = (buf, destStartFrame, srcStartFrame, maxFrames, rate = 1) => {
                     if (!buf) return;
-                    const n = Math.min(maxFrames, buf.length - srcStartFrame, masterFrames - destStartFrame);
-                    if (n <= 0) return;
                     const chL = buf.getChannelData(0);
                     const chR = buf.numberOfChannels > 1 ? buf.getChannelData(1) : chL;
+                    if (rate !== 1) {
+                        const n = Math.min(maxFrames, masterFrames - destStartFrame);
+                        for (let i = 0; i < n; i++) {
+                            const sp = srcStartFrame + i * rate;
+                            const i0 = Math.floor(sp);
+                            if (i0 >= buf.length - 1) break;
+                            const frac = sp - i0;
+                            masterL[destStartFrame + i] += chL[i0] + (chL[i0 + 1] - chL[i0]) * frac;
+                            masterR[destStartFrame + i] += chR[i0] + (chR[i0 + 1] - chR[i0]) * frac;
+                        }
+                        return;
+                    }
+                    const n = Math.min(maxFrames, buf.length - srcStartFrame, masterFrames - destStartFrame);
+                    if (n <= 0) return;
                     for (let i = 0; i < n; i++) {
                         masterL[destStartFrame + i] += chL[srcStartFrame + i];
                         masterR[destStartFrame + i] += chR[srcStartFrame + i];
@@ -726,7 +742,8 @@ export async function exportVideo({
                         buf,
                         Math.floor(item.start * EXPORT_SAMPLE_RATE),
                         Math.floor((item.trimStart || 0) * EXPORT_SAMPLE_RATE),
-                        Math.floor(item.duration * EXPORT_SAMPLE_RATE)
+                        Math.floor(item.duration * EXPORT_SAMPLE_RATE),
+                        mediaSpeed(item)
                     );
                 }
 
